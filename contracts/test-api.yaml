@@ -1,0 +1,71 @@
+openapi: 3.0.3
+
+info:
+  title: Test API
+  version: 1.0.0
+
+paths:
+  /products:
+    get:
+      summary: Lista produtos
+      responses:
+        "200":
+          description: Lista de produtos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    name:
+                      type: string
+                    price:
+                      type: number
+
+    post:
+      summary: Cria um produto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - price
+              properties:
+                name:
+                  type: string
+                price:
+                  type: number
+      responses:
+        "201":
+          description: Produto criado
+
+  /products/{id}:
+    get:
+      summary: Busca um produto
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Produto encontrado
+
+    delete:
+      summary: Remove um produto
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Produto removido
