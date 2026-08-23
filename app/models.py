@@ -2,10 +2,16 @@ from pydantic import BaseModel, Field
 from typing import Any
 
 
+class Parameter(BaseModel):
+    name: str
+    location: str
+    required: bool = False
+    schema_data: dict[str, Any] = Field(default_factory=dict, alias="schema")
+
 class Endpoint(BaseModel):
     path: str
     method: str
     summary: str | None = None
-    parameters: list[dict[str, Any]] = Field(default_factory=list)
+    parameters: list[Parameter] = Field(default_factory=list)
     request_body: dict[str, Any] | None = None
     responses: dict[str, Any] = Field(default_factory=dict)

@@ -8,6 +8,12 @@ paths:
   /products:
     get:
       summary: Lista produtos
+      parameters:
+        - name: category
+          in: query
+          required: false
+          schema:
+            type: string
       responses:
         "200":
           description: Lista de produtos
@@ -57,7 +63,22 @@ paths:
       responses:
         "200":
           description: Produto encontrado
-
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - name
+                  - price
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  price:
+                    type: number
+  
     delete:
       summary: Remove um produto
       parameters:
