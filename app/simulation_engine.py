@@ -1,12 +1,13 @@
 from .models import Endpoint
 from .validator import PayloadValidator
-
+from .context_builder import ContextBuilder
 
 class SimulationEngine:
-    def __init__(self, endpoints: list[Endpoint]):
+    def __init__(self, endpoints: list[Endpoint], contract: dict):
         self.endpoints = endpoints
         self.validator = PayloadValidator()
-
+        self.context_builder = ContextBuilder(contract)
+    
     def find_endpoint(self, path: str, method: str):
         for endpoint in self.endpoints:
             if endpoint.path == path and endpoint.method.upper() == method.upper():
@@ -116,6 +117,12 @@ class SimulationEngine:
                 "status_code": 404,
                 "message": "Endpoint não encontrado"
             }
+
+        context = self.context_builder.build(
+            endpoint,
+            parameters,
+            request_body
+        )
 
         request_schema = self.get_request_body_schema(endpoint)
 

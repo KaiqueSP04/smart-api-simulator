@@ -15,7 +15,7 @@ app = FastAPI(
 contract = parse_openapi("contracts/test-api.yaml")
 endpoints = get_endpoints(contract)
 
-engine = SimulationEngine(endpoints)
+engine = SimulationEngine(endpoints, contract)
 
 
 @app.get("/")
