@@ -1,18 +1,30 @@
 from .models import Endpoint
 from .validator import PayloadValidator
 from .context_builder import ContextBuilder
+from .session_manager import SessionManager
+
 
 class SimulationEngine:
-    def __init__(self, endpoints: list[Endpoint], contract: dict):
+    def __init__(
+        self,
+        endpoints: list[Endpoint],
+        contract: dict,
+        session_manager: SessionManager
+    ):
         self.endpoints = endpoints
         self.validator = PayloadValidator()
-        self.context_builder = ContextBuilder(contract)
-    
+        self.context_builder = ContextBuilder(
+            contract,
+            session_manager
+        )
+
     def find_endpoint(self, path: str, method: str):
         for endpoint in self.endpoints:
-            if endpoint.path == path and endpoint.method.upper() == method.upper():
+            if (
+                endpoint.path == path
+                and endpoint.method.upper() == method.upper()
+            ):
                 return endpoint
-
         return None
 
     def get_response_schema(self, endpoint: Endpoint):
@@ -40,13 +52,16 @@ class SimulationEngine:
 
         return json_content.get("schema")
 
-    def generate_response(self, endpoint: Endpoint, parameters=None):
-        schema = self.get_response_schema(endpoint)
+    def generate_response(self, context):
+        schema = context.get("response_schema")
 
         if not schema:
             return None
 
-        return self.generate_from_schema(schema, parameters or {})
+        return self.generate_from_schema(
+            schema,
+            context.get("parameters", {})
+        )
 
     def generate_from_schema(self, schema, parameters):
         schema_type = schema.get("type")
@@ -54,7 +69,9 @@ class SimulationEngine:
         if schema_type == "object":
             result = {}
 
-            for name, property_schema in schema.get("properties", {}).items():
+            for name, property_schema in schema.get(
+                "properties", {}
+            ).items():
                 if name in parameters:
                     result[name] = self.convert_parameter_value(
                         parameters[name],
@@ -72,7 +89,10 @@ class SimulationEngine:
             item_schema = schema.get("items", {})
 
             return [
-                self.generate_from_schema(item_schema, parameters)
+                self.generate_from_schema(
+                    item_schema,
+                    parameters
+                )
             ]
 
         if schema_type == "string":
@@ -103,12 +123,13 @@ class SimulationEngine:
 
         return str(value)
 
-    def simulate(
+    async def simulate(
         self,
         path: str,
         method: str,
         parameters=None,
-        request_body=None
+        request_body=None,
+        session_id: str | None = None
     ):
         endpoint = self.find_endpoint(path, method)
 
@@ -118,8 +139,9 @@ class SimulationEngine:
                 "message": "Endpoint não encontrado"
             }
 
-        context = self.context_builder.build(
+        context = await self.context_builder.build(
             endpoint,
+            session_id,
             parameters,
             request_body
         )
@@ -146,12 +168,9 @@ class SimulationEngine:
 
         status_code = int(next(iter(endpoint.responses)))
 
-        response_data = self.generate_response(
-            endpoint,
-            parameters
-        )
+        response_data = self.generate_response(context)
 
-        response_schema = self.get_response_schema(endpoint)
+        response_schema = context.get("response_schema")
 
         if response_schema:
             is_valid = self.validator.validate(
@@ -169,5 +188,6 @@ class SimulationEngine:
             "status_code": status_code,
             "data": response_data,
             "parameters": parameters or {},
-            "request_body": request_body
+            "request_body": request_body,
+            "context": context
         }

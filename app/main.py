@@ -1,21 +1,54 @@
 import inspect
+import os
+from contextlib import asynccontextmanager
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Body
 from fastapi.responses import JSONResponse
+from pymongo import AsyncMongoClient
+
 from .parser import parse_openapi, get_endpoints
 from .simulation_engine import SimulationEngine
+from .session_manager import SessionManager
 
 
-app = FastAPI(
-    title="Smart API Simulator",
-    version="0.1.0"
-)
+load_dotenv()
 
 
 contract = parse_openapi("contracts/test-api.yaml")
 endpoints = get_endpoints(contract)
 
-engine = SimulationEngine(endpoints, contract)
+mongo_client = AsyncMongoClient(
+    os.getenv("MONGODB_URI")
+)
+
+db = mongo_client["smart_api_simulator"]
+
+session_manager = SessionManager(db)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await mongo_client.admin.command("ping")
+    await session_manager.initialize()
+
+    yield
+
+    await mongo_client.close()
+
+
+app = FastAPI(
+    title="Smart API Simulator",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+
+engine = SimulationEngine(
+    endpoints,
+    contract,
+    session_manager
+)
 
 
 @app.get("/")
@@ -47,11 +80,14 @@ def create_endpoint_handler(endpoint):
 
         request_body = kwargs.get("body")
 
-        result = engine.simulate(
+        session_id = request.headers.get("X-Session-ID")
+
+        result = await engine.simulate(
             endpoint.path,
             endpoint.method,
             parameters,
-            request_body
+            request_body,
+            session_id
         )
 
         return JSONResponse(
@@ -71,15 +107,25 @@ def create_endpoint_handler(endpoint):
         if parameter.location not in {"path", "query"}:
             continue
 
-        parameter_type = get_python_type(parameter.schema_data)
+        parameter_type = get_python_type(
+            parameter.schema_data
+        )
+
+        if parameter.required:
+            default = inspect.Parameter.empty
+        else:
+            default = None
 
         signature_parameter = inspect.Parameter(
             parameter.name,
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=parameter_type
+            annotation=parameter_type,
+            default=default
         )
 
-        signature_parameters.append(signature_parameter)
+        signature_parameters.append(
+            signature_parameter
+        )
 
     if endpoint.request_body:
         signature_parameters.append(

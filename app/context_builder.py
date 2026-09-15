@@ -1,12 +1,26 @@
 from .models import Endpoint
+from .session_manager import SessionManager
 
 
 class ContextBuilder:
-
-    def __init__(self, contract: dict):
+    def __init__(self, contract: dict, session_manager: SessionManager):
         self.contract = contract
+        self.session_manager = session_manager
 
-    def build(self, endpoint: Endpoint, parameters=None, request_body=None):
+    async def build(
+        self,
+        endpoint: Endpoint,
+        session_id: str | None = None,
+        parameters=None,
+        request_body=None
+    ):
+        session_state = None
+
+        if session_id:
+            session_state = await self.session_manager.get_session(
+                session_id
+            )
+
         return {
             "endpoint": {
                 "method": endpoint.method,
@@ -17,6 +31,7 @@ class ContextBuilder:
             "request_body": request_body,
             "request_schema": self._get_request_schema(endpoint),
             "response_schema": self._get_response_schema(endpoint),
+            "session_state": session_state,
         }
 
     def _get_request_schema(self, endpoint: Endpoint):
