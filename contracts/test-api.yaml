@@ -50,6 +50,21 @@ paths:
       responses:
         "201":
           description: Produto criado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - name
+                  - price
+                properties:
+                  id:
+                    type: integer
+                  name:
+                    type: string
+                  price:
+                    type: number
 
   /products/{id}:
     get:

@@ -1,7 +1,10 @@
+import json
+
 from .models import Endpoint
 from .validator import PayloadValidator
 from .context_builder import ContextBuilder
 from .session_manager import SessionManager
+from .llm_adapter import LLMAdapter
 
 
 class SimulationEngine:
@@ -17,6 +20,7 @@ class SimulationEngine:
             contract,
             session_manager
         )
+        self.llm_adapter = LLMAdapter()
 
     def find_endpoint(self, path: str, method: str):
         for endpoint in self.endpoints:
@@ -25,6 +29,7 @@ class SimulationEngine:
                 and endpoint.method.upper() == method.upper()
             ):
                 return endpoint
+
         return None
 
     def get_response_schema(self, endpoint: Endpoint):
@@ -52,76 +57,13 @@ class SimulationEngine:
 
         return json_content.get("schema")
 
-    def generate_response(self, context):
-        schema = context.get("response_schema")
+    async def generate_response(self, context):
+        response_text = await self.llm_adapter.generate(context)
 
-        if not schema:
+        try:
+            return json.loads(response_text)
+        except json.JSONDecodeError:
             return None
-
-        return self.generate_from_schema(
-            schema,
-            context.get("parameters", {})
-        )
-
-    def generate_from_schema(self, schema, parameters):
-        schema_type = schema.get("type")
-
-        if schema_type == "object":
-            result = {}
-
-            for name, property_schema in schema.get(
-                "properties", {}
-            ).items():
-                if name in parameters:
-                    result[name] = self.convert_parameter_value(
-                        parameters[name],
-                        property_schema
-                    )
-                else:
-                    result[name] = self.generate_from_schema(
-                        property_schema,
-                        parameters
-                    )
-
-            return result
-
-        if schema_type == "array":
-            item_schema = schema.get("items", {})
-
-            return [
-                self.generate_from_schema(
-                    item_schema,
-                    parameters
-                )
-            ]
-
-        if schema_type == "string":
-            return "exemplo"
-
-        if schema_type == "integer":
-            return 1
-
-        if schema_type == "number":
-            return 10.0
-
-        if schema_type == "boolean":
-            return True
-
-        return None
-
-    def convert_parameter_value(self, value, schema):
-        schema_type = schema.get("type")
-
-        if schema_type == "integer":
-            return int(value)
-
-        if schema_type == "number":
-            return float(value)
-
-        if schema_type == "boolean":
-            return str(value).lower() == "true"
-
-        return str(value)
 
     async def simulate(
         self,
@@ -167,22 +109,54 @@ class SimulationEngine:
                 }
 
         status_code = int(next(iter(endpoint.responses)))
-
-        response_data = self.generate_response(context)
-
         response_schema = context.get("response_schema")
 
-        if response_schema:
-            is_valid = self.validator.validate(
-                response_data,
-                response_schema
-            )
+        response_data = None
 
-            if not is_valid:
+        for _ in range(3):
+            try:
+                response_data = await self.generate_response(context)
+
+            except Exception as exc:
+                exception_name = type(exc).__name__
+                exception_status = getattr(exc, "status_code", None)
+
+                if exception_status == 429:
+                    return {
+                        "status_code": 429,
+                        "message": "Limite de requisições do Gemini excedido"
+                    }
+
+                if exception_name == "APITimeoutError":
+                    return {
+                        "status_code": 503,
+                        "message": "Gemini excedeu o tempo limite"
+                    }
+
                 return {
-                    "status_code": 500,
-                    "message": "Payload gerado não corresponde ao schema"
+                    "status_code": 503,
+                    "message": "Serviço do Gemini indisponível"
                 }
+
+            if response_data is None:
+                continue
+
+            if response_schema:
+                is_valid = self.validator.validate(
+                    response_data,
+                    response_schema
+                )
+
+                if not is_valid:
+                    continue
+
+            break
+
+        if response_data is None:
+            return {
+                "status_code": 500,
+                "message": "Gemini retornou uma resposta inválida após 3 tentativas"
+            }
 
         return {
             "status_code": status_code,
