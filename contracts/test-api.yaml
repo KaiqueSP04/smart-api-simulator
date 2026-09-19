@@ -1,38 +1,14 @@
 openapi: 3.0.3
 
 info:
-  title: Test API
+  title: E-commerce Orders and Payments API
   version: 1.0.0
 
 paths:
-  /products:
-    get:
-      summary: Lista produtos
-      parameters:
-        - name: category
-          in: query
-          required: false
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Lista de produtos
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id:
-                      type: integer
-                    name:
-                      type: string
-                    price:
-                      type: number
 
+  /orders:
     post:
-      summary: Cria um produto
+      summary: Cria um pedido
       requestBody:
         required: true
         content:
@@ -40,35 +16,38 @@ paths:
             schema:
               type: object
               required:
-                - name
-                - price
+                - customer_name
+                - total
               properties:
-                name:
+                customer_name:
                   type: string
-                price:
+                total:
                   type: number
       responses:
         "201":
-          description: Produto criado
+          description: Pedido criado
           content:
             application/json:
               schema:
                 type: object
                 required:
                   - id
-                  - name
-                  - price
+                  - customer_name
+                  - total
+                  - status
                 properties:
                   id:
                     type: integer
-                  name:
+                  customer_name:
                     type: string
-                  price:
+                  total:
                     type: number
+                  status:
+                    type: string
 
-  /products/{id}:
+  /orders/{id}:
     get:
-      summary: Busca um produto
+      summary: Consulta um pedido
       parameters:
         - name: id
           in: path
@@ -77,25 +56,74 @@ paths:
             type: integer
       responses:
         "200":
-          description: Produto encontrado
+          description: Pedido encontrado
           content:
             application/json:
               schema:
                 type: object
                 required:
                   - id
-                  - name
-                  - price
+                  - customer_name
+                  - total
+                  - status
                 properties:
                   id:
                     type: integer
-                  name:
+                  customer_name:
                     type: string
-                  price:
+                  total:
                     type: number
-  
-    delete:
-      summary: Remove um produto
+                  status:
+                    type: string
+
+  /payments:
+    post:
+      summary: Processa um pagamento
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - order_id
+                - amount
+                - method
+              properties:
+                order_id:
+                  type: integer
+                amount:
+                  type: number
+                method:
+                  type: string
+      responses:
+        "201":
+          description: Pagamento processado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - order_id
+                  - amount
+                  - method
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  order_id:
+                    type: integer
+                  amount:
+                    type: number
+                  method:
+                    type: string
+                  status:
+                    type: string
+
+  /payments/{id}/confirm:
+    post:
+      summary: Confirma um pagamento
       parameters:
         - name: id
           in: path
@@ -103,5 +131,54 @@ paths:
           schema:
             type: integer
       responses:
-        "204":
-          description: Produto removido
+        "200":
+          description: Pagamento confirmado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - order_id
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  order_id:
+                    type: integer
+                  status:
+                    type: string
+
+  /payments/{id}:
+    get:
+      summary: Consulta um pagamento
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pagamento encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - order_id
+                  - amount
+                  - method
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  order_id:
+                    type: integer
+                  amount:
+                    type: number
+                  method:
+                    type: string
+                  status:
+                    type: string

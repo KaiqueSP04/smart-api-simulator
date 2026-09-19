@@ -38,7 +38,7 @@ class LLMAdapter:
                 "mime_type": "application/json",
                 "schema": response_schema
             },
-            timeout=10
+            timeout=60
         )
 
         return interaction.output_text

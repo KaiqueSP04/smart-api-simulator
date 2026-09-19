@@ -3,7 +3,7 @@ import os
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Body
+from fastapi import FastAPI, Request, Body, Header
 from fastapi.responses import JSONResponse
 from pymongo import AsyncMongoClient
 
@@ -72,7 +72,11 @@ def get_python_type(schema: dict):
 
 
 def create_endpoint_handler(endpoint):
-    async def endpoint_handler(request: Request, **kwargs):
+    async def endpoint_handler(
+        request: Request,
+        x_session_id: str | None = None,
+        **kwargs
+    ):
         parameters = {
             **request.path_params,
             **dict(request.query_params)
@@ -80,7 +84,7 @@ def create_endpoint_handler(endpoint):
 
         request_body = kwargs.get("body")
 
-        session_id = request.headers.get("X-Session-ID")
+        session_id = x_session_id
 
         result = await engine.simulate(
             endpoint.path,
@@ -136,6 +140,18 @@ def create_endpoint_handler(endpoint):
                 default=Body(...)
             )
         )
+
+    signature_parameters.append(
+        inspect.Parameter(
+            "x_session_id",
+            inspect.Parameter.KEYWORD_ONLY,
+            annotation=str | None,
+            default=Header(
+                None,
+                alias="X-Session-ID"
+            )
+        )
+    )
 
     endpoint_handler.__signature__ = inspect.Signature(
         parameters=signature_parameters
