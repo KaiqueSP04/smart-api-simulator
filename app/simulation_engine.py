@@ -4,8 +4,7 @@ from .models import Endpoint
 from .validator import PayloadValidator
 from .context_builder import ContextBuilder
 from .session_manager import SessionManager
-from .llm_adapter import LLMAdapter
-
+from .llm_adapter import LLMAdapter, GeminiTimeout
 
 class SimulationEngine:
     def __init__(
@@ -15,6 +14,7 @@ class SimulationEngine:
         session_manager: SessionManager
     ):
         self.endpoints = endpoints
+        self.session_manager = session_manager
         self.validator = PayloadValidator()
         self.context_builder = ContextBuilder(
             contract,
@@ -56,6 +56,52 @@ class SimulationEngine:
         json_content = content.get("application/json", {})
 
         return json_content.get("schema")
+
+    def _get_resource_type(self, path: str):
+        segments = [
+            segment
+            for segment in path.split("/")
+            if segment and not segment.startswith("{")
+        ]
+
+        if not segments:
+            return None
+
+        return segments[0]
+
+    async def _persist_state(
+        self,
+        session_id: str,
+        path: str,
+        response_data: dict
+    ):
+        if not isinstance(response_data, dict):
+            return
+
+        resource_type = self._get_resource_type(path)
+
+        if resource_type is None:
+            return
+
+        entity_id = response_data.get("id")
+
+        if entity_id is None:
+            return
+
+        state = await self.session_manager.get_session(session_id)
+
+        if not isinstance(state, dict):
+            state = {}
+
+        resource_state = state.get(resource_type)
+
+        if not isinstance(resource_state, dict):
+            resource_state = {}
+
+        resource_state[str(entity_id)] = response_data
+        state[resource_type] = resource_state
+
+        await self.session_manager.save_session(session_id, state)
 
     async def generate_response(self, context):
         response_text = await self.llm_adapter.generate(context)
@@ -117,6 +163,12 @@ class SimulationEngine:
             try:
                 response_data = await self.generate_response(context)
 
+            except GeminiTimeout:
+                return {
+                    "status_code": 503,
+                    "message": "Gemini excedeu o tempo limite"
+                }
+
             except Exception as exc:
                 exception_name = type(exc).__name__
                 exception_status = getattr(exc, "status_code", None)
@@ -157,6 +209,13 @@ class SimulationEngine:
                 "status_code": 500,
                 "message": "Gemini retornou uma resposta inválida após 3 tentativas"
             }
+
+        if session_id:
+            await self._persist_state(
+                session_id,
+                path,
+                response_data
+            )
 
         return {
             "status_code": status_code,
