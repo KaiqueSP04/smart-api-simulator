@@ -8,7 +8,8 @@ from google import genai
 load_dotenv()
 
 # Tempo máximo (em segundos) que esperamos pela resposta do Gemini.
-TEMPO_MAXIMO = 120
+# Serve para o sistema nunca ficar preso indefinidamente numa chamada.
+TEMPO_MAXIMO = 180
 
 # Erro que representa o Gemini ter estourado o nosso tempo limite.
 class GeminiTimeout(Exception):
@@ -80,15 +81,14 @@ class LLMAdapter:
         )
 
     def _build_prompt(self, context: dict):
-        return f"""
-Você é um simulador de API REST.
+        return f"""Você é um simulador de API REST. Sua tarefa é preencher o JSON de resposta.
 
-Gere uma resposta para a requisição com base no contexto abaixo.
-
-Contexto:
+Contexto da requisição:
 
 {context}
 
-Gere uma resposta coerente com os dados da requisição,
-com o estado da sessão e com o contexto do endpoint.
-"""
+Regras:
+- Preencha os campos exigidos pelo response_schema com valores plausíveis.
+- Use os dados de request_body e session_state onde fizerem sentido, para manter coerência entre as requisições.
+- Os nomes dos campos e os valores técnicos (como status) devem seguir a convenção dos schemas. As descrições (summary) servem apenas como contexto e não definem o idioma dos valores.
+- Não explique. Não raciocine em texto. Retorne somente o JSON da resposta."""
