@@ -1,4 +1,5 @@
 import json
+import time
 
 from .models import Endpoint
 from .validator import PayloadValidator
@@ -11,10 +12,12 @@ class SimulationEngine:
         self,
         endpoints: list[Endpoint],
         contract: dict,
-        session_manager: SessionManager
+        session_manager: SessionManager,
+        request_logger=None
     ):
         self.endpoints = endpoints
         self.session_manager = session_manager
+        self.request_logger = request_logger
         self.validator = PayloadValidator()
         self.context_builder = ContextBuilder(
             contract,
@@ -111,7 +114,77 @@ class SimulationEngine:
         except json.JSONDecodeError:
             return None
 
+    def _build_fallback(self, schema):
+        # Monta uma resposta "esqueleto" a partir do schema, de forma
+        # genérica (sem hardcode de domínio). Usada quando o Gemini
+        # devolve respostas inválidas após todas as tentativas.
+        if not isinstance(schema, dict):
+            return None
+
+        schema_type = schema.get("type")
+
+        if schema_type == "object":
+            result = {}
+            properties = schema.get("properties", {})
+
+            for field, field_schema in properties.items():
+                result[field] = self._build_fallback(field_schema)
+
+            return result
+
+        if schema_type == "array":
+            return []
+
+        if schema_type == "string":
+            return ""
+
+        if schema_type == "integer":
+            return 0
+
+        if schema_type == "number":
+            return 0
+
+        if schema_type == "boolean":
+            return False
+
+        return None
+
     async def simulate(
+        self,
+        path: str,
+        method: str,
+        parameters=None,
+        request_body=None,
+        session_id: str | None = None
+    ):
+        # Envolve a simulação para medir a latência e registrar o histórico
+        # da requisição (coleção 'requests'), sem alterar a lógica central.
+        inicio = time.perf_counter()
+
+        result = await self._run(
+            path,
+            method,
+            parameters,
+            request_body,
+            session_id
+        )
+
+        latency_ms = (time.perf_counter() - inicio) * 1000
+
+        if self.request_logger is not None:
+            await self.request_logger.log(
+                path=path,
+                method=method,
+                status_code=result.get("status_code", 200),
+                latency_ms=round(latency_ms, 2),
+                valid=("data" in result),
+                fallback=result.get("fallback", False),
+                session_id=session_id
+            )
+
+        return result
+
+    async def _run(
         self,
         path: str,
         method: str,
@@ -205,6 +278,20 @@ class SimulationEngine:
             break
 
         if response_data is None:
+            # Fallback: após 3 tentativas sem resposta válida, monta uma
+            # resposta a partir do schema para não deixar o fluxo sem retorno.
+            fallback_data = self._build_fallback(response_schema)
+
+            if fallback_data is not None:
+                return {
+                    "status_code": status_code,
+                    "data": fallback_data,
+                    "fallback": True,
+                    "parameters": parameters or {},
+                    "request_body": request_body,
+                    "context": context
+                }
+
             return {
                 "status_code": 500,
                 "message": "Gemini retornou uma resposta inválida após 3 tentativas"

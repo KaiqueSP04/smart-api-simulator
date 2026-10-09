@@ -65,7 +65,7 @@ class LLMAdapter:
 
     async def _chamar_gemini(self, prompt, response_schema):
         return await self.client.aio.interactions.create(
-            model="gemini-3.6-flash",
+            model="gemini-3.5-flash-lite",
             input=prompt,
             response_format={
                 "type": "text",

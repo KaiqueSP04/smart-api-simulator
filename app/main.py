@@ -10,6 +10,7 @@ from pymongo import AsyncMongoClient
 from .parser import parse_openapi, get_endpoints
 from .simulation_engine import SimulationEngine
 from .session_manager import SessionManager
+from .request_logger import RequestLogger
 
 
 load_dotenv()
@@ -25,7 +26,7 @@ mongo_client = AsyncMongoClient(
 db = mongo_client["smart_api_simulator"]
 
 session_manager = SessionManager(db)
-
+request_logger = RequestLogger(db)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,7 +48,8 @@ app = FastAPI(
 engine = SimulationEngine(
     endpoints,
     contract,
-    session_manager
+    session_manager,
+    request_logger
 )
 
 
