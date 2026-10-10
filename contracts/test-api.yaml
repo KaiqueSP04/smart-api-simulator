@@ -182,3 +182,62 @@ paths:
                     type: string
                   status:
                     type: string
+
+  /orders/{id}/cancel:
+    post:
+      summary: Cancela um pedido
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pedido cancelado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - customer_name
+                  - total
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  customer_name:
+                    type: string
+                  total:
+                    type: number
+                  status:
+                    type: string
+
+  /payments/{id}/cancel:
+    post:
+      summary: Cancela um pagamento
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Pagamento cancelado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - id
+                  - order_id
+                  - status
+                properties:
+                  id:
+                    type: integer
+                  order_id:
+                    type: integer
+                  status:
+                    type: string
