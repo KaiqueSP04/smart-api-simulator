@@ -120,7 +120,7 @@ As respostas são solicitadas em formato JSON estruturado com base no schema de 
 Configuração atual da integração:
 
 Modelo: gemini-3.5-flash-lite;
-Nível de raciocínio (thinking_level): low;
+Nível de raciocínio (thinking_level): high;
 Timeout controlado pela aplicação (limite atual de 180 segundos).
 O sistema também possui:
 
@@ -320,8 +320,4 @@ O contrato de teste atualmente utilizado possui escopo controlado e serve para v
 
 **Principais atualizações:** modelo lite, fallback (nova seção), RequestLogger (nova seção), Railway como implementado, `request_logger.py` e `Procfile` na estrutura, melhorias futuras atualizadas (upload, rules e ids viraram "futuro").
 
-Cola no `README.md`, salva, e aí commita tudo junto. Agora são **6 arquivos**:
-git add app/simulation_engine.py app/request_logger.py app/main.py app/llm_adapter.py Procfile README.md
-
-
-Confirma e commita. Me avisa quando o push terminar.
+versão aplicação 1.0
