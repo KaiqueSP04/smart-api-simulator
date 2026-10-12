@@ -74,7 +74,7 @@ class LLMAdapter:
             },
             generation_config={
                 "thinking_config": {
-                    "thinking_level": "low"
+                    "thinking_level": "high"
                 }
             },
             timeout=TEMPO_MAXIMO

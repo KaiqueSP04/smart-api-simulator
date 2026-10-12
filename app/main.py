@@ -165,10 +165,20 @@ def create_endpoint_handler(endpoint):
 def register_endpoint(endpoint):
     endpoint_handler = create_endpoint_handler(endpoint)
 
+    documented_responses = {
+        200: {"description": "Operação realizada com sucesso"},
+        201: {"description": "Recurso criado com sucesso"},
+        400: {"description": "Requisição inválida"},
+        404: {"description": "Recurso não encontrado"},
+        429: {"description": "Limite de requisições do serviço de IA"},
+        503: {"description": "Serviço temporariamente indisponível"}
+    }
+
     app.add_api_route(
         endpoint.path,
         endpoint_handler,
-        methods=[endpoint.method]
+        methods=[endpoint.method],
+        responses=documented_responses
     )
 
 

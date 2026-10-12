@@ -101,7 +101,17 @@ class SimulationEngine:
         if not isinstance(resource_state, dict):
             resource_state = {}
 
-        resource_state[str(entity_id)] = response_data
+        existing_data = resource_state.get(str(entity_id), {})
+
+        if isinstance(existing_data, dict) and existing_data:
+            updated_data = existing_data.copy()
+
+            if "status" in response_data:
+                updated_data["status"] = response_data["status"]
+
+            resource_state[str(entity_id)] = updated_data
+        else:
+            resource_state[str(entity_id)] = response_data
         state[resource_type] = resource_state
 
         await self.session_manager.save_session(session_id, state)
@@ -113,41 +123,6 @@ class SimulationEngine:
             return json.loads(response_text)
         except json.JSONDecodeError:
             return None
-
-    def _build_fallback(self, schema):
-        # Monta uma resposta "esqueleto" a partir do schema, de forma
-        # genérica (sem hardcode de domínio). Usada quando o Gemini
-        # devolve respostas inválidas após todas as tentativas.
-        if not isinstance(schema, dict):
-            return None
-
-        schema_type = schema.get("type")
-
-        if schema_type == "object":
-            result = {}
-            properties = schema.get("properties", {})
-
-            for field, field_schema in properties.items():
-                result[field] = self._build_fallback(field_schema)
-
-            return result
-
-        if schema_type == "array":
-            return []
-
-        if schema_type == "string":
-            return ""
-
-        if schema_type == "integer":
-            return 0
-
-        if schema_type == "number":
-            return 0
-
-        if schema_type == "boolean":
-            return False
-
-        return None
 
     async def simulate(
         self,
@@ -207,6 +182,27 @@ class SimulationEngine:
             request_body
         )
 
+        method_upper = method.upper()
+        path_parts = [part for part in path.split("/") if part]
+
+        if (
+            session_id
+            and method_upper in {"GET", "POST"}
+            and len(path_parts) >= 2
+            and path_parts[1] == "{id}"
+        ):
+            resource_type = path_parts[0]
+            entity_id = (parameters or {}).get("id")
+
+            state = await self.session_manager.get_session(session_id)
+            resources = (state or {}).get(resource_type, {})
+
+            if str(entity_id) not in resources:
+                return {
+                    "status_code": 404,
+                    "message": "Recurso não encontrado na sessão"
+                }
+
         request_schema = self.get_request_body_schema(endpoint)
 
         if request_schema:
@@ -230,7 +226,47 @@ class SimulationEngine:
         status_code = int(next(iter(endpoint.responses)))
         response_schema = context.get("response_schema")
 
+        resource_type = self._get_resource_type(path)
+
+        # Consultas de recursos existentes em uma sessão usam o estado
+        # persistido como fonte de verdade, sem chamar a LLM.
+        if session_id and method_upper == "GET" and "{id}" in path:
+            entity_id = (parameters or {}).get("id")
+            current_state = await self.session_manager.get_session(session_id)
+            stored_data = (
+                (current_state or {})
+                .get(resource_type, {})
+                .get(str(entity_id))
+            )
+
+            if not isinstance(stored_data, dict):
+                return {
+                    "status_code": 404,
+                    "message": "Recurso não encontrado na sessão"
+                }
+
+            if response_schema and not self.validator.validate(
+                stored_data, response_schema
+            ):
+                return {
+                    "status_code": 503,
+                    "message": "Estado armazenado incompatível com o schema da resposta"
+                }
+
+            return {
+                "status_code": status_code,
+                "data": stored_data,
+                "parameters": parameters or {},
+                "request_body": request_body,
+                "context": context
+            }
+
         response_data = None
+
+        is_creation = (
+            method.upper() == "POST"
+            and path.rstrip("/") == f"/{resource_type}"
+        )
 
         for _ in range(3):
             try:
@@ -273,36 +309,65 @@ class SimulationEngine:
                 )
 
                 if not is_valid:
+                    response_data = None
+                    continue
+
+            if "{id}" in path and isinstance(response_data, dict):
+                requested_id = (parameters or {}).get("id")
+                returned_id = response_data.get("id")
+
+                if returned_id is None or str(returned_id) != str(requested_id):
+                    response_data = None
+                    continue    
+
+            if session_id and is_creation and isinstance(response_data, dict):
+                entity_id = response_data.get("id")
+
+                if entity_id is None:
+                    response_data = None
+                    continue
+
+                state = await self.session_manager.get_session(session_id)
+                resources = (state or {}).get(resource_type, {})
+
+                if str(entity_id) in resources:
+                    response_data = None
                     continue
 
             break
 
         if response_data is None:
-            # Fallback: após 3 tentativas sem resposta válida, monta uma
-            # resposta a partir do schema para não deixar o fluxo sem retorno.
-            fallback_data = self._build_fallback(response_schema)
-
-            if fallback_data is not None:
+            if is_creation:
                 return {
-                    "status_code": status_code,
-                    "data": fallback_data,
-                    "fallback": True,
-                    "parameters": parameters or {},
-                    "request_body": request_body,
-                    "context": context
+                    "status_code": 503,
+                    "message": "Não foi possível gerar um recurso válido e único após 3 tentativas"
                 }
 
             return {
-                "status_code": 500,
-                "message": "Gemini retornou uma resposta inválida após 3 tentativas"
+                "status_code": 503,
+                "message": "Não foi possível gerar uma resposta válida após 3 tentativas"
             }
 
-        if session_id:
+        if session_id and method_upper != "GET":
             await self._persist_state(
                 session_id,
                 path,
                 response_data
             )
+
+            if not is_creation and isinstance(response_data, dict):
+                entity_id = response_data.get("id")
+
+                if entity_id is not None:
+                    updated_state = await self.session_manager.get_session(session_id)
+                    stored_data = (
+                        (updated_state or {})
+                        .get(resource_type, {})
+                        .get(str(entity_id))
+                    )
+
+                    if isinstance(stored_data, dict):
+                        response_data = stored_data
 
         return {
             "status_code": status_code,

@@ -6,6 +6,9 @@ class PayloadValidator:
     def validate(self, payload: Any, schema: dict) -> bool:
         schema_type = schema.get("type")
 
+        if "enum" in schema and payload not in schema["enum"]:
+            return False
+
         if schema_type == "object":
             return self.validate_object(payload, schema)
 
