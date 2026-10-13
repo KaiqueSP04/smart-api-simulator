@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from pymongo import AsyncMongoClient
 
-from app.session_manager import SessionManager
+from app.adapters.mongodb_sessions import SessionManager
 
 
 load_dotenv()

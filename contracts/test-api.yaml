@@ -9,10 +9,22 @@ paths:
   /orders:
     post:
       summary: Cria um pedido
+      description: |
+        Cria um pedido e retorna o identificador do recurso.
+        Para consultar ou alterar esse pedido, envie o mesmo X-Session-ID
+        nas requisições seguintes.
       requestBody:
         required: true
+        description: Informe o cliente e o valor total do pedido.
         content:
           application/json:
+            examples:
+              pedido_completo:
+                summary: Exemplo completo de pedido
+                description: Preencha o nome do cliente e o valor total.
+                value:
+                  customer_name: Maria Silva
+                  total: 249.90
             schema:
               type: object
               required:
@@ -21,8 +33,12 @@ paths:
               properties:
                 customer_name:
                   type: string
+                  description: Nome completo do cliente.
+                  example: Maria Silva
                 total:
                   type: number
+                  description: Valor total do pedido.
+                  example: 249.90
       responses:
         "201":
           description: Pedido criado
@@ -49,10 +65,16 @@ paths:
   /orders/{id}:
     get:
       summary: Consulta um pedido
+      description: |
+        Informe o id retornado ao criar o pedido e use o mesmo X-Session-ID
+        enviado na criação. Exemplo: crie o pedido com POST /orders e depois
+        consulte GET /orders/{id} com id 101.
       parameters:
         - name: id
           in: path
           required: true
+          description: ID retornado pela criação do pedido (POST /orders).
+          example: 101
           schema:
             type: integer
       responses:
@@ -81,10 +103,22 @@ paths:
   /payments:
     post:
       summary: Processa um pagamento
+      description: |
+        Processa o pagamento de um pedido. Em um fluxo encadeado, use o
+        order_id retornado por POST /orders e mantenha o mesmo X-Session-ID.
       requestBody:
         required: true
+        description: Informe o pedido, o valor e o método de pagamento.
         content:
           application/json:
+            examples:
+              pagamento_completo:
+                summary: Exemplo completo de pagamento
+                description: Use o id de um pedido criado na mesma sessão.
+                value:
+                  order_id: 101
+                  amount: 249.90
+                  method: credit_card
             schema:
               type: object
               required:
@@ -94,10 +128,16 @@ paths:
               properties:
                 order_id:
                   type: integer
+                  description: ID do pedido retornado por POST /orders.
+                  example: 101
                 amount:
                   type: number
+                  description: Valor do pagamento.
+                  example: 249.90
                 method:
                   type: string
+                  description: Método de pagamento utilizado.
+                  example: credit_card
       responses:
         "201":
           description: Pagamento processado
@@ -126,10 +166,13 @@ paths:
   /payments/{id}/confirm:
     post:
       summary: Confirma um pagamento
+      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
       parameters:
         - name: id
           in: path
           required: true
+          description: ID do pagamento retornado por POST /payments.
+          example: 201
           schema:
             type: integer
       responses:
@@ -154,10 +197,13 @@ paths:
   /payments/{id}:
     get:
       summary: Consulta um pagamento
+      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
       parameters:
         - name: id
           in: path
           required: true
+          description: ID do pagamento retornado por POST /payments.
+          example: 201
           schema:
             type: integer
       responses:
@@ -188,10 +234,13 @@ paths:
   /orders/{id}/cancel:
     post:
       summary: Cancela um pedido
+      description: Informe o id retornado por POST /orders e use o mesmo X-Session-ID.
       parameters:
         - name: id
           in: path
           required: true
+          description: ID do pedido retornado por POST /orders.
+          example: 101
           schema:
             type: integer
       responses:
@@ -220,10 +269,13 @@ paths:
   /payments/{id}/cancel:
     post:
       summary: Cancela um pagamento
+      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
       parameters:
         - name: id
           in: path
           required: true
+          description: ID do pagamento retornado por POST /payments.
+          example: 201
           schema:
             type: integer
       responses:

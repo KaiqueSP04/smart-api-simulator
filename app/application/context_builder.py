@@ -1,26 +1,20 @@
-from .models import Endpoint
-from .session_manager import SessionManager
+from typing import Any
+
+from ..models import Endpoint
+from .results import SimulationContext
 
 
 class ContextBuilder:
-    def __init__(self, contract: dict, session_manager: SessionManager):
+    def __init__(self, contract: dict):
         self.contract = contract
-        self.session_manager = session_manager
 
-    async def build(
+    def build(
         self,
         endpoint: Endpoint,
-        session_id: str | None = None,
-        parameters=None,
-        request_body=None
-    ):
-        session_state = None
-
-        if session_id:
-            session_state = await self.session_manager.get_session(
-                session_id
-            )
-
+        parameters: dict[str, Any] | None = None,
+        request_body: Any = None,
+        session_state: dict | None = None,
+    ) -> SimulationContext:
         return {
             "endpoint": {
                 "method": endpoint.method,

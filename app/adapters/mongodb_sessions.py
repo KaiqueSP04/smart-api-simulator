@@ -1,3 +1,5 @@
+"""MongoDB implementation of the application's session storage port."""
+
 from datetime import datetime, timedelta, timezone
 
 

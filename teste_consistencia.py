@@ -1,5 +1,9 @@
 import asyncio
-from app.main import engine
+import json
+from app.main import app
+
+
+engine = app.state.simulation_engine
 
 
 async def testar():
@@ -12,7 +16,7 @@ async def testar():
         "status": "created"
     }
 
-    await engine.session_manager.save_session(
+    await engine.session_resources.session_store.save_session(
         sessao,
         {"orders": {"101": pedido_original.copy()}}
     )
@@ -25,10 +29,13 @@ async def testar():
             "status": "cancelled"
         }
 
-    original = engine.generate_response
+    original = engine.response_generation.response_generator.generate
 
     try:
-        engine.generate_response = resposta_inconsistente
+        async def resposta_json(context):
+            return json.dumps(await resposta_inconsistente(context))
+
+        engine.response_generation.response_generator.generate = resposta_json
 
         resultado = await engine.simulate(
             path="/orders/{id}/cancel",
@@ -37,7 +44,7 @@ async def testar():
             session_id=sessao
         )
 
-        estado = await engine.session_manager.get_session(sessao)
+        estado = await engine.session_resources.session_store.get_session(sessao)
         pedido_final = estado["orders"]["101"]
 
         print("HTTP:", resultado["status_code"])
@@ -54,7 +61,7 @@ async def testar():
         )
 
     finally:
-        engine.generate_response = original
+        engine.response_generation.response_generator.generate = original
 
 
 asyncio.run(testar())

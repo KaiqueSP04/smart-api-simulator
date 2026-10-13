@@ -1,16 +1,25 @@
 
 import copy
+import json
 
 import pytest
 import yaml
 
+from app.adapters.http_results import to_http_response
 from app.models import Endpoint
-from app import simulation_engine
+from app.application.context_builder import ContextBuilder
+from app.application.response_generation import ResponseGenerationService
+from app.application.session_resources import SessionResources
+from app.application.simulation_engine import SimulationEngine
+from app.application.validator import PayloadValidator
 
 
-class FakeSessionManager:
+class FakeSessionStore:
     def __init__(self):
         self.sessions = {}
+
+    async def initialize(self):
+        pass
 
     async def get_session(self, session_id):
         state = self.sessions.get(session_id)
@@ -19,16 +28,34 @@ class FakeSessionManager:
     async def save_session(self, session_id, state):
         self.sessions[session_id] = copy.deepcopy(state)
 
+    async def delete_session(self, session_id):
+        self.sessions.pop(session_id, None)
+
 
 class FakeLogger:
     def __init__(self):
         self.records = []
 
-    async def log(self, **kwargs):
-        self.records.append(kwargs)
+    async def log(
+        self,
+        path,
+        method,
+        result,
+        latency_ms=None,
+        session_id=None,
+    ):
+        self.records.append({
+            "path": path,
+            "method": method,
+            "status_code": to_http_response(result)[0],
+            "latency_ms": latency_ms,
+            "valid": result.failure is None,
+            "fallback": False,
+            "session_id": session_id,
+        })
 
 
-class FakeLLMAdapter:
+class FakeResponseGenerator:
     async def generate(self, context):
         raise AssertionError(
             "O Gemini real não deve ser chamado nos testes."
@@ -36,7 +63,7 @@ class FakeLLMAdapter:
 
 
 @pytest.fixture
-def environment(monkeypatch):
+def environment():
     with open("contracts/test-api.yaml", encoding="utf-8") as file:
         contract = yaml.safe_load(file)
 
@@ -68,19 +95,23 @@ def environment(monkeypatch):
                 )
             )
 
-    monkeypatch.setattr(
-        simulation_engine,
-        "LLMAdapter",
-        FakeLLMAdapter,
+    sessions = FakeSessionStore()
+    session_resources = SessionResources(sessions)
+    logger = FakeLogger()
+    validator = PayloadValidator()
+    response_generator = FakeResponseGenerator()
+    response_generation = ResponseGenerationService(
+        response_generator,
+        validator,
+        session_resources,
     )
 
-    sessions = FakeSessionManager()
-    logger = FakeLogger()
-
-    engine = simulation_engine.SimulationEngine(
+    engine = SimulationEngine(
         endpoints=endpoints,
-        contract=contract,
-        session_manager=sessions,
+        context_builder=ContextBuilder(contract),
+        session_resources=session_resources,
+        response_generation=response_generation,
+        validator=validator,
         request_logger=logger,
     )
 
@@ -95,15 +126,15 @@ def mock_responses(monkeypatch, engine, responses):
         calls.append(context)
 
         try:
-            return next(queue)
+            return json.dumps(next(queue))
         except StopIteration:
             raise AssertionError(
                 "O motor fez mais chamadas do que o esperado."
             )
 
     monkeypatch.setattr(
-        engine,
-        "generate_response",
+        engine.response_generation.response_generator,
+        "generate",
         fake_generate,
     )
 
@@ -139,7 +170,7 @@ async def test_criacao_e_consulta_de_pedido(environment, monkeypatch):
         [order_data()],
     )
 
-    created = await engine.simulate(
+    created = await simulate_http(engine,
         "/orders",
         "POST",
         request_body={
@@ -152,7 +183,7 @@ async def test_criacao_e_consulta_de_pedido(environment, monkeypatch):
     assert created["status_code"] == 201
     assert created["data"] == order_data()
 
-    consulted = await engine.simulate(
+    consulted = await simulate_http(engine,
         "/orders/{id}",
         "GET",
         parameters={"id": 101},
@@ -171,7 +202,7 @@ async def test_isolamento_entre_sessoes(environment, monkeypatch):
 
     mock_responses(monkeypatch, engine, [order_data()])
 
-    await engine.simulate(
+    await simulate_http(engine,
         "/orders",
         "POST",
         request_body={
@@ -181,7 +212,7 @@ async def test_isolamento_entre_sessoes(environment, monkeypatch):
         session_id="sessaoA",
     )
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders/{id}",
         "GET",
         parameters={"id": 101},
@@ -207,7 +238,7 @@ async def test_cancelamento_preserva_dados(environment, monkeypatch):
         [order_data(total=9999, status="cancelled")],
     )
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders/{id}/cancel",
         "POST",
         parameters={"id": 101},
@@ -243,7 +274,7 @@ async def test_criacao_e_confirmacao_pagamento(
         ],
     )
 
-    created = await engine.simulate(
+    created = await simulate_http(engine,
         "/payments",
         "POST",
         request_body={
@@ -256,7 +287,7 @@ async def test_criacao_e_confirmacao_pagamento(
 
     assert created["status_code"] == 201
 
-    confirmed = await engine.simulate(
+    confirmed = await simulate_http(engine,
         "/payments/{id}/confirm",
         "POST",
         parameters={"id": 201},
@@ -268,7 +299,7 @@ async def test_criacao_e_confirmacao_pagamento(
     assert confirmed["data"]["amount"] == 175
     assert confirmed["data"]["method"] == "credit_card"
 
-    consulted = await engine.simulate(
+    consulted = await simulate_http(engine,
         "/payments/{id}",
         "GET",
         parameters={"id": 201},
@@ -285,7 +316,7 @@ async def test_validacao_do_request_body(environment, monkeypatch):
 
     calls = mock_responses(monkeypatch, engine, [])
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders",
         "POST",
         request_body={
@@ -312,7 +343,7 @@ async def test_resposta_invalida_apos_tres_tentativas(
         [None, None, None],
     )
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders",
         "POST",
         request_body={
@@ -347,7 +378,7 @@ async def test_id_incorreto_na_resposta(environment, monkeypatch):
         ],
     )
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders/{id}/cancel",
         "POST",
         parameters={"id": 101},
@@ -377,7 +408,7 @@ async def test_colisao_de_id_na_criacao(environment, monkeypatch):
         [order_data(), order_data(), order_data()],
     )
 
-    result = await engine.simulate(
+    result = await simulate_http(engine,
         "/orders",
         "POST",
         request_body={
@@ -393,3 +424,74 @@ async def test_colisao_de_id_na_criacao(environment, monkeypatch):
     assert len(calls) == 3
     assert state["orders"]["101"] == order_data()
     assert len(state["orders"]) == 1
+
+
+async def simulate_http(engine, *args, **kwargs):
+    result = await engine.simulate(*args, **kwargs)
+    return to_http_response(result)[1]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure, expected_kind, expected_status", [
+    ("timeout", "generation_timeout", 503),
+    ("quota", "generation_rate_limited", 429),
+    ("unavailable", "generation_unavailable", 503),
+])
+async def test_generator_failures_are_transport_independent(
+    environment, monkeypatch, failure, expected_kind, expected_status,
+):
+    from app.application.ports import GenerationRateLimited, GenerationTimeout
+
+    engine, sessions, logger = environment
+    exceptions = {
+        "timeout": GenerationTimeout(),
+        "quota": GenerationRateLimited(),
+        "unavailable": RuntimeError("provider-specific detail"),
+    }
+
+    async def fail(context):
+        raise exceptions[failure]
+
+    monkeypatch.setattr(engine.response_generation.response_generator, "generate", fail)
+    result = await engine.simulate(
+        "/orders", "POST",
+        request_body={"customer_name": "Cliente Teste", "total": 175},
+        session_id="sessaoA",
+    )
+    assert result.failure.kind.value == expected_kind
+    assert "Gemini" not in result.failure.message
+    assert to_http_response(result)[0] == expected_status
+    assert await sessions.get_session("sessaoA") is None
+    assert logger.records[0]["valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_http_flow_preserves_envelope_and_maps_failures(environment, monkeypatch):
+    import httpx
+    from app.adapters.http_api import create_http_app
+
+    engine, sessions, logger = environment
+    mock_responses(monkeypatch, engine, [order_data()])
+    app = create_http_app(list(engine.endpoints.values()), engine, lifespan=None)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test",
+    ) as client:
+        created = await client.post(
+            "/orders", json={"customer_name": "Cliente Teste", "total": 175},
+            headers={"X-Session-ID": "sessaoA"},
+        )
+        assert created.status_code == 201
+        assert created.json()["data"] == order_data()
+        assert created.json()["context"]["endpoint"]["path"] == "/orders"
+        found = await client.get("/orders/101", headers={"X-Session-ID": "sessaoA"})
+        assert found.status_code == 200
+        assert found.json()["data"] == order_data()
+        missing = await client.get("/orders/101", headers={"X-Session-ID": "sessaoB"})
+        assert missing.status_code == 404
+        assert missing.json() == {
+            "status_code": 404, "message": "Recurso não encontrado na sessão",
+        }
+        invalid = await client.post("/orders", json={"customer_name": "Teste", "total": "x"})
+        assert invalid.status_code == 400
+        invalid_parameter = await client.get("/orders/abc")
+        assert invalid_parameter.status_code == 422

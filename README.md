@@ -30,51 +30,58 @@ O domínio experimental definido para o projeto é:
 
 ## Arquitetura
 
-O projeto segue o padrão **Microkernel**: o motor de simulação é genérico e não conhece nenhum domínio específico. Todo o domínio (endpoints, campos, schemas, idioma dos textos) vem do contrato OpenAPI. Isso permite que o mesmo motor simule qualquer API REST válida, sem alteração de código.
+O projeto segue uma **arquitetura hexagonal leve (Ports and Adapters)**. A aplicação de simulação depende de portas (contratos) e não instancia diretamente Gemini ou MongoDB. Os adaptadores concretos são montados no ponto de composição `app/main.py`, e podem ser substituídos por fakes nos testes.
+
+O contrato OpenAPI fornece endpoints e schemas como configuração da simulação. Ele não é tratado como plugin: o projeto não possui carregamento ou registro de plugins.
+
+Os contratos são declarados como `Protocol` em `app/application/ports.py`. `SimulationEngine` coordena o caso de uso; `ResponseGenerationService` aplica parsing, validação e retries; `SessionResources` concentra leitura e atualização do estado de recursos. `ContextBuilder` é síncrono e não acessa serviços externos. A composição destas classes e seus adaptadores fica em `app/main.py`.
+
+O motor retorna `SimulationResult`, uma dataclass com o recurso gerado ou uma `SimulationFailure` categorizada por `FailureKind`. Ele não decide códigos HTTP para falhas. O contexto é descrito por `SimulationContext` (`TypedDict`), preservando o formato JSON utilizado pelo gerador. Essas estruturas ficam em `app/application/results.py`; as convenções de identificação e criação de recursos ficam centralizadas em `app/application/resource_rules.py`.
+
+O adaptador `app/adapters/http_results.py` traduz os resultados da aplicação para códigos HTTP e para o envelope público (`status_code`, `data`, `parameters`, `request_body`, `context`; ou `status_code` e `message` para falhas). O código de sucesso vem da chave de resposta do contrato OpenAPI. A porta `RequestLog` recebe o resultado tipado; o adaptador MongoDB traduz esse resultado para manter o formato do histórico. Mensagens da aplicação referem-se ao serviço de geração, permitindo trocar o fornecedor de IA.
+
+Para consumidores Python do motor, use `result.data`, `result.failure` e `result.response_key`, em vez de acessar um dicionário HTTP. O formato JSON servido pela API permanece o mesmo.
 
 O fluxo principal do sistema é:
 
 ```text
-Contrato OpenAPI
+Adaptador HTTP (FastAPI)
        ↓
-OpenAPI Parser
-       ↓
-SimulationEngine
-       ↓
-ContextBuilder
-       ↓
-LLMAdapter
-       ↓
-Google Gemini
-       ↓
-PayloadValidator
-       ↓
-Resposta simulada
-       ↓
-Persistência de estado
+Aplicação: SimulationEngine
+       ├── ContextBuilder / PayloadValidator
+       ├── porta ResponseGenerator ── adaptador Gemini
+       ├── porta SessionStore ─────── adaptador MongoDB
+       └── porta RequestLog ───────── adaptador MongoDB
+
+Contrato OpenAPI ── adaptador/parser ── configuração de endpoints
+```
+
 OpenAPI Parser
 Responsável por interpretar o contrato OpenAPI e extrair informações dos endpoints, incluindo: método HTTP, caminho, resumo, parâmetros, request body, respostas e schemas.
 
 SimulationEngine
-É responsável por orquestrar o processo de simulação. Ele:
+Coordena o fluxo de simulação, delegando as regras específicas aos serviços da aplicação. Ele:
 
 identifica o endpoint correspondente à requisição;
 solicita a construção do contexto;
 verifica o request body quando aplicável;
-solicita a geração da resposta pelo modelo de linguagem;
-valida o payload gerado;
-realiza novas tentativas quando o payload é inválido;
-aciona o fallback quando as tentativas se esgotam;
-persiste o estado da sessão a partir da resposta gerada;
-registra a requisição no histórico;
+consulta ou atualiza o estado por meio de SessionResources;
+solicita uma resposta válida ao ResponseGenerationService;
+registra a latência e o resultado pelo contrato RequestLog;
 retorna a resposta simulada ou um erro apropriado.
+
+ResponseGenerationService
+Responsável por chamar a porta ResponseGenerator, interpretar o JSON, validar o schema da resposta, verificar a consistência do id e repetir a geração até três vezes quando necessário. Traduz timeout, limite de requisições e falhas de geração para falhas tipadas da aplicação, que os adaptadores convertem para HTTP.
+
+SessionResources
+Encapsula as operações e regras de acesso ao estado dos recursos de uma sessão. Usa a porta SessionStore, sem conhecer a implementação MongoDB.
 ContextBuilder
 Responsável por construir o contexto utilizado durante a simulação, que pode incluir: endpoint atual, parâmetros recebidos, request body, schema da requisição, schema da resposta e estado da sessão.
 
 O sistema utiliza apenas o contexto relevante para a requisição atual, evitando o envio desnecessário de todo o contrato OpenAPI ao modelo de linguagem.
 
-LLMAdapter
-Camada responsável pela comunicação com o Google Gemini. O LLMAdapter isola a integração do modelo de linguagem do restante do sistema, de modo que o SimulationEngine não dependa diretamente da implementação específica da API do Gemini.
+GeminiResponseGenerator
+Adaptador que implementa a porta ResponseGenerator e isola a comunicação com o Google Gemini. O SimulationEngine trabalha com a porta, sem depender do SDK ou do cliente do Gemini.
 
 O adapter constrói o prompt a partir do contexto, envia a solicitação ao Gemini, solicita respostas em JSON estruturado de acordo com o schema, retorna o conteúdo gerado e possui controle de timeout próprio e confiável.
 
@@ -88,14 +95,14 @@ Responsável por verificar se os payloads estão de acordo com os schemas defini
 
 Quando uma resposta gerada não atende ao schema, o sistema realiza até três tentativas de geração.
 
-Fallback
-Quando as três tentativas de geração se esgotam sem uma resposta válida, o sistema aciona um fallback: monta uma resposta mínima a partir do próprio schema do contrato (preenchendo cada campo com um valor padrão do seu tipo) e a retorna marcada com "fallback": true. Isso evita que uma falha de geração do modelo interrompa o fluxo. O fallback cobre apenas o caso de resposta inválida; falhas externas (indisponibilidade, timeout, rate limit) retornam o erro real, sem mascaramento.
+Falha após esgotamento das tentativas
+Quando as três tentativas de geração se esgotam sem uma resposta válida, o sistema retorna erro HTTP 503 controlado. Não existe fallback estático nem geração de resposta mínima a partir do schema. Falhas externas, como indisponibilidade e timeout, também são tratadas como erros; o limite de requisições do Gemini é tratado com HTTP 429.
 
 SessionManager
-Responsável pelo gerenciamento do estado das sessões. O estado é armazenado no MongoDB Atlas e recuperado por um identificador de sessão enviado na requisição. As sessões possuem expiração automática após 30 minutos por meio de um índice TTL do MongoDB.
+Adaptador MongoDB que implementa a porta SessionStore. O estado é armazenado no MongoDB Atlas e recuperado por um identificador de sessão enviado na requisição. As sessões possuem expiração automática após 30 minutos por meio de um índice TTL do MongoDB.
 
 RequestLogger
-Registra o histórico de requisições na coleção requests (endpoint, método, status, latência, uso de fallback e timestamp). O registro é best-effort: uma falha ao gravar o log nunca interrompe a resposta ao cliente. Esses dados servem de base para os indicadores de avaliação do projeto.
+Adaptador que implementa a porta RequestLog e registra o histórico de requisições na coleção requests (endpoint, método, status, latência e timestamp). O registro é best-effort: uma falha ao gravar o log nunca interrompe a resposta ao cliente. Esses dados servem de base para os indicadores de avaliação do projeto.
 
 Persistência de estado
 O sistema utiliza o MongoDB Atlas para armazenar o estado das sessões.
@@ -113,7 +120,7 @@ O estado é acumulado de forma genérica, indexado pelo tipo de recurso (derivad
 Esse mecanismo é o que permite representar fluxos encadeados, como criação de pedido seguida de processamento e confirmação de pagamento.
 
 Integração com Google Gemini
-O Google Gemini é utilizado para gerar dinamicamente as respostas simuladas. A comunicação com o modelo ocorre exclusivamente por meio do LLMAdapter.
+O Google Gemini é utilizado para gerar dinamicamente as respostas simuladas. A comunicação com o modelo ocorre exclusivamente por meio do adaptador Gemini, que implementa a porta ResponseGenerator.
 
 As respostas são solicitadas em formato JSON estruturado com base no schema de resposta definido pelo contrato OpenAPI.
 
@@ -128,7 +135,7 @@ timeout próprio para chamadas ao Gemini, que conta o tempo total e garante que 
 tratamento de limite de requisições (rate limit);
 tratamento de indisponibilidade do serviço;
 validação do payload gerado;
-novas tentativas quando o payload gerado é inválido, com fallback a partir do schema.
+novas tentativas quando o payload gerado é inválido, com retorno HTTP 503 após o esgotamento das três tentativas, sem fallback.
 Sobre a latência
 Durante o desenvolvimento observou-se que o tempo de resposta do Gemini é variável e não é controlável pela aplicação. Testes de diagnóstico indicaram que, mesmo reduzindo ao máximo o "raciocínio" do modelo, o tempo total oscila de acordo com a disponibilidade do serviço. No Free Tier, as requisições têm prioridade menor e podem aguardar em fila ou ser recusadas em momentos de alta demanda.
 
@@ -151,15 +158,21 @@ Estrutura do projeto
 smart-api-simulator/
 │
 ├── app/
-│   ├── main.py
-│   ├── models.py
-│   ├── parser.py
-│   ├── simulation_engine.py
-│   ├── context_builder.py
-│   ├── session_manager.py
-│   ├── request_logger.py
-│   ├── validator.py
-│   └── llm_adapter.py
+│   ├── main.py                 # ponto de composição e configuração
+│   ├── models.py               # modelos do contrato
+│   ├── application/
+│   │   ├── ports.py            # contratos consumidos pela aplicação
+│   │   ├── simulation_engine.py
+│   │   ├── response_generation.py
+│   │   ├── session_resources.py
+│   │   ├── context_builder.py
+│   │   └── validator.py
+│   └── adapters/
+│       ├── http_api.py         # entrada FastAPI
+│       ├── openapi_parser.py
+│       ├── gemini.py
+│       ├── mongodb_sessions.py
+│       └── mongodb_request_logger.py
 │
 ├── contracts/
 │   └── test-api.yaml
@@ -223,6 +236,19 @@ Com o ambiente virtual ativado:
 uvicorn app.main:app --reload
 A aplicação ficará disponível em http://127.0.0.1:8000 e a documentação interativa do Swagger em http://127.0.0.1:8000/docs.
 
+### Usando o Swagger
+
+A página `/docs` apresenta um roteiro de uso e grupos de **Pedidos**, **Pagamentos** e **Sistema**, com filtro de operações e exibição do tempo da requisição. Os schemas de resposta documentam o envelope real: o recurso fica em `data`, inclusive nas respostas de criação com código 201. Os erros da simulação incluem exemplos de `status_code` e `message`; erros de parâmetros ou corpo detectados pelo FastAPI usam 422 e `detail`.
+
+1. Abra `POST /orders`, clique em **Try it out** e use o exemplo preenchido. Envie a requisição com `X-Session-ID: checkout-demo-001`.
+2. Anote o `id` retornado em `data.id`.
+3. Use esse id em `GET /orders/{id}` ou em `POST /payments`. Reutilize exatamente o mesmo `X-Session-ID` para compartilhar o estado da sessão.
+4. Para processar o pagamento, preencha `order_id` com o id do pedido criado. Em seguida, use o `id` retornado pelo pagamento nas operações de consulta, confirmação ou cancelamento.
+
+Os exemplos exibidos nos campos do Swagger são definidos no contrato OpenAPI em `contracts/test-api.yaml`. Os resumos, descrições, exemplos do corpo, parâmetros de caminho e orientações do cabeçalho de sessão vêm desse contrato e do adaptador HTTP.
+
+Nos corpos JSON, o exemplo inclui todos os campos declarados no schema. Para criar um pedido, use `customer_name` e `total` (não `customer`). Para processar um pagamento, informe `order_id`, `amount` e `method`.
+
 Nuvem (Railway)
 A aplicação também é publicada em nuvem na plataforma Railway, por meio de deploy automático a partir do repositório GitHub. O Procfile define o comando de inicialização, e as credenciais (GEMINI_API_KEY e MONGODB_URI) são configuradas como variáveis de ambiente na plataforma. Dessa forma, os endpoints simulados ficam acessíveis publicamente pela internet, sem necessidade de servidor local.
 
@@ -268,7 +294,7 @@ Testes automatizados e de diagnóstico
 O projeto possui testes auxiliares para validar componentes específicos do sistema:
 
 test_gemini.py — verifica a conexão com o Gemini;
-test_llm_adapter.py — verifica a comunicação do LLMAdapter com o modelo;
+test_llm_adapter.py — verifica a comunicação do adaptador Gemini com o modelo;
 test_retry.py — verifica o comportamento de novas tentativas para respostas inválidas;
 test_mongodb.py — verifica a conexão com o MongoDB;
 test_session_manager.py — verifica o gerenciamento das sessões;
@@ -288,11 +314,11 @@ Implementado e validado
  Gerenciamento de sessões e expiração automática (TTL de 30 minutos)
  Recuperação de estado pelo X-Session-ID
  Construção de contexto relevante por endpoint
- Integração do LLMAdapter com o Google Gemini
+ Integração do adaptador Gemini com o Google Gemini
  Geração dinâmica de respostas em JSON estruturado
  Validação das respostas geradas pelo Gemini
  Retry para payloads inválidos (até três tentativas)
- Fallback a partir do schema quando as tentativas se esgotam
+ Retorno de erro HTTP 503 quando as três tentativas de geração são esgotadas (sem fallback)
  Timeout próprio e confiável para chamadas ao Gemini
  Tratamento de erros do serviço do Gemini (rate limit, indisponibilidade, timeout)
  Persistência genérica de estado, indexada por recurso e id
@@ -312,12 +338,18 @@ O domínio utilizado para validação do protótipo é o de e-commerce, com foco
 
 Os testes de fluxo confirmaram que o simulador utiliza o contexto da sessão para produzir respostas coerentes ao longo desses fluxos.
 
+Para executar a suíte local sem chamadas ao Gemini ou MongoDB:
+
+```bash
+python -m pytest tests test_simulation_engine.py -q
+```
+
+Essa suíte verifica os fluxos com sessões, isolamento, retries, falhas do gerador, tradução dos resultados para HTTP e documentação OpenAPI. Os scripts de diagnóstico externos da raiz não fazem parte desse comando.
+
 Observações
 O projeto encontra-se em fase de finalização no contexto de um Trabalho de Conclusão de Curso.
 
-O contrato de teste atualmente utilizado possui escopo controlado e serve para validar o funcionamento do protótipo. Por respeitar o padrão Microkernel, o mesmo motor de simulação pode ser utilizado com outros contratos OpenAPI válidos, sem necessidade de alteração de código.
+O contrato de teste atualmente utilizado possui escopo controlado e serve para validar o funcionamento do protótipo. A separação entre aplicação e adaptadores permite substituir integrações externas e testar o motor com implementações falsas, sem exigir um servidor Gemini ou MongoDB nos testes de unidade.
 
 
-**Principais atualizações:** modelo lite, fallback (nova seção), RequestLogger (nova seção), Railway como implementado, `request_logger.py` e `Procfile` na estrutura, melhorias futuras atualizadas (upload, rules e ids viraram "futuro").
-
-versão aplicação 1.0
+**Principais atualizações:** arquitetura hexagonal leve, documentação interativa orientada ao uso, integração Gemini, registro de requisições e tratamento de respostas inválidas com até três tentativas e erro HTTP 503, sem fallback.

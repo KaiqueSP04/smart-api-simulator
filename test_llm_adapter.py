@@ -1,10 +1,10 @@
 import asyncio
 
-from app.llm_adapter import LLMAdapter
+from app.adapters.gemini import GeminiResponseGenerator
 
 
 async def main():
-    adapter = LLMAdapter()
+    adapter = GeminiResponseGenerator()
 
     context = {
         "endpoint": {

@@ -1,4 +1,11 @@
+import logging
 from datetime import datetime, timezone
+
+from ..application.results import SimulationResult
+from .http_results import to_http_response
+
+
+logger = logging.getLogger(__name__)
 
 class RequestLogger:
     """Registra o histórico de requisições na coleção 'requests'.
@@ -16,19 +23,18 @@ class RequestLogger:
         self,
         path: str,
         method: str,
-        status_code: int,
+        result: SimulationResult,
         latency_ms: float | None = None,
-        valid: bool | None = None,
-        fallback: bool = False,
         session_id: str | None = None
     ):
+        status_code, _ = to_http_response(result)
         document = {
             "endpoint": path,
             "method": method,
             "status_code": status_code,
             "latency_ms": latency_ms,
-            "valid": valid,
-            "fallback": fallback,
+            "valid": result.failure is None,
+            "fallback": False,
             "session_id": session_id,
             "timestamp": datetime.now(timezone.utc)
         }
@@ -37,4 +43,4 @@ class RequestLogger:
             await self.requests.insert_one(document)
         except Exception:
             # Log é best-effort: não derruba a requisição se falhar.
-            pass
+            logger.exception("Não foi possível registrar a requisição")

@@ -1,6 +1,6 @@
 import yaml
 
-from .models import Endpoint, Parameter
+from ..models import Endpoint, Parameter
 
 
 def parse_openapi(file_path: str):
@@ -77,7 +77,12 @@ def get_endpoints(contract):
                         name=parameter.get("name"),
                         location=parameter.get("in"),
                         required=parameter.get("required", False),
-                        schema_data=resolve_refs(
+                        description=parameter.get("description"),
+                        example=parameter.get(
+                            "example",
+                            parameter.get("schema", {}).get("example"),
+                        ),
+                        schema=resolve_refs(
                             parameter.get("schema", {}),
                             contract
                         )
@@ -98,6 +103,7 @@ def get_endpoints(contract):
                 path=path,
                 method=method.upper(),
                 summary=details.get("summary"),
+                description=details.get("description"),
                 parameters=parameters,
                 request_body=request_body,
                 responses=responses

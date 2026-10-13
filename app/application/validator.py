@@ -1,3 +1,5 @@
+"""Validation helpers used by the simulation application."""
+
 from typing import Any
 
 

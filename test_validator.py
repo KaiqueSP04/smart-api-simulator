@@ -1,4 +1,4 @@
-from app.validator import PayloadValidator
+from app.application.validator import PayloadValidator
 
 
 validator = PayloadValidator()

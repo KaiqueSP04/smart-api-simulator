@@ -1,4 +1,4 @@
-from app.parser import parse_openapi, get_endpoints
+from app.adapters.openapi_parser import parse_openapi, get_endpoints
 
 
 contract = parse_openapi("contracts/test-api.yaml")

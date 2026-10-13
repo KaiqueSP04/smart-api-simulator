@@ -1,11 +1,25 @@
 import asyncio
 
-from app.simulation_engine import SimulationEngine
+from app.application.context_builder import ContextBuilder
+from app.application.response_generation import ResponseGenerationService
+from app.application.session_resources import SessionResources
+from app.application.simulation_engine import SimulationEngine
 from app.models import Endpoint
-from app.session_manager import SessionManager
+from app.application.validator import PayloadValidator
 
 
-class FakeLLMAdapter:
+class FakeSessionStore:
+    async def initialize(self):
+        pass
+
+    async def get_session(self, session_id):
+        return None
+
+    async def save_session(self, session_id, state):
+        pass
+
+
+class FakeResponseGenerator:
     def __init__(self):
         self.attempts = 0
 
@@ -42,23 +56,24 @@ async def main():
         }
     )
 
-    class FakeDB:
-        def __getitem__(self, name):
-            return None
-
-
+    fake_generator = FakeResponseGenerator()
+    session_resources = SessionResources(FakeSessionStore())
+    validator = PayloadValidator()
     engine = SimulationEngine(
-        [endpoint],
-        {},
-        SessionManager(FakeDB())
+        endpoints=[endpoint],
+        context_builder=ContextBuilder({}),
+        session_resources=session_resources,
+        response_generation=ResponseGenerationService(
+            fake_generator,
+            validator,
+            session_resources,
+        ),
+        validator=validator,
     )
-
-    fake_llm = FakeLLMAdapter()
-    engine.llm_adapter = fake_llm
 
     result = await engine.simulate("/products", "GET")
 
-    print("Tentativas:", fake_llm.attempts)
+    print("Tentativas:", fake_generator.attempts)
     print("Resultado:", result)
 
 
