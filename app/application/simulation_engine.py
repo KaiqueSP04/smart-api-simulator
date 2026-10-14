@@ -3,7 +3,7 @@ from typing import Any
 
 from ..models import Endpoint
 from .context_builder import ContextBuilder
-from .ports import RequestLog
+from .ports import RequestLog, RequestPolicy
 from .response_generation import ResponseGenerationService
 from .session_resources import SessionResources
 from .resource_rules import get_resource_type, is_creation, uses_resource_id
@@ -20,6 +20,7 @@ class SimulationEngine:
         response_generation: ResponseGenerationService,
         validator: PayloadValidator,
         request_logger: RequestLog | None = None,
+        request_policy: RequestPolicy | None = None,
     ):
         self.endpoints = {
             (endpoint.path, endpoint.method.upper()): endpoint
@@ -30,6 +31,7 @@ class SimulationEngine:
         self.response_generation = response_generation
         self.validator = validator
         self.request_logger = request_logger
+        self.request_policy = request_policy
 
     def find_endpoint(self, path: str, method: str) -> Endpoint | None:
         return self.endpoints.get((path, method.upper()))
@@ -92,13 +94,18 @@ class SimulationEngine:
             if request_body is None:
                 return SimulationResult.failed(
                     FailureKind.INVALID_REQUEST,
-                    "Request body obrigatório",
+                    "Corpo da requisição obrigatório",
                 )
             if not self.validator.validate(request_body, request_schema):
                 return SimulationResult.failed(
                     FailureKind.INVALID_REQUEST,
-                    "Request body não corresponde ao schema",
+                    "Dados inválidos. Confira os campos obrigatórios e os limites descritos na documentação.",
                 )
+
+        if self.request_policy is not None:
+            failure = self.request_policy.validate(context, session_id)
+            if failure is not None:
+                return SimulationResult(failure=failure)
 
         method_upper = method.upper()
         resource_type = get_resource_type(path)

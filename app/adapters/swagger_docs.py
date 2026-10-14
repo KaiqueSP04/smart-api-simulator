@@ -9,14 +9,27 @@ DESCRIPTION = """
 Simule pedidos e pagamentos e acompanhe os recursos de uma mesma sessão.
 
 ### Experimente um fluxo completo
-1. Abra **POST /orders**, clique em **Try it out** e use o exemplo do corpo.
+1. Abra **POST /pedidos**, clique em **Try it out** e preencha cliente e itens.
 2. Preencha **X-Session-ID** com `checkout-demo-001` e clique em **Execute**.
-3. Copie o identificador de **data.id** da resposta.
-4. Em **GET /orders/{id}**, informe esse identificador e repita o mesmo cabeçalho.
-5. Em **POST /payments**, coloque o identificador do pedido em **order_id**
-   e use a mesma sessão. Copie o novo **data.id**, que identifica o pagamento.
-6. Use esse identificador em **POST /payments/{id}/confirm** e consulte
-   **GET /payments/{id}**, sempre com a mesma sessão.
+3. Confira **dados.total**, calculado automaticamente, e copie **dados.id**.
+4. Em **GET /pedidos/{id}**, informe esse identificador e repita o mesmo cabeçalho.
+5. Em **POST /pagamentos**, coloque o identificador do pedido em **pedido_id**,
+   escolha **metodo** e repita a sessão. O valor vem automaticamente do pedido.
+   Copie o novo **dados.id**.
+6. Use o ID do pagamento em **POST /pagamentos/{id}/confirmar** e consulte
+   **GET /pagamentos/{id}**, sempre com a mesma sessão.
+
+### Preenchimento simples
+| Campo | O que informar |
+| --- | --- |
+| nome_cliente | Nome do cliente |
+| itens | Lista dos produtos; adicione um objeto por produto diferente |
+| nome_produto | Nome do produto |
+| quantidade | Número inteiro de unidades, a partir de 1 |
+| preco_unitario | Preço de uma unidade, com ponto decimal e até duas casas: 124.95 |
+
+Não informe **total** na criação do pedido: o sistema soma quantidade × preço
+de cada item. Dois pedidos separados exigem duas chamadas de criação.
 
 ### Sessões e respostas
 - **X-Session-ID** é opcional. Use-o para manter os recursos entre chamadas.
@@ -24,16 +37,17 @@ Simule pedidos e pagamentos e acompanhe os recursos de uma mesma sessão.
 - Repita o valor em cada requisição. Os exemplos de IDs são ilustrativos:
   substitua-os pelos identificadores retornados na sua sessão.
 - A sessão expira após 30 minutos sem gravação de estado.
-- O recurso retornado fica em **data**. **status_code** indica o resultado;
-  **parameters**, **request_body** e **context** mostram os dados da simulação.
-- Em caso de erro, leia **message**. Um **404** com sessão pode indicar que o
+- O recurso retornado fica em **dados**. **codigo_status** indica o resultado.
+- **X-Debug** fica em **false** por padrão. Selecione **true** para incluir
+  **diagnostico**, com parâmetros, corpo enviado e contexto técnico da simulação.
+- Em caso de erro, leia **mensagem**. Um **404** com sessão pode indicar que o
   recurso não foi criado nela ou que a sessão expirou.
 """
 
 
 def resource_tag(endpoint: Endpoint) -> str:
     resource = endpoint.path.strip("/").split("/")[0]
-    return {"orders": "Pedidos", "payments": "Pagamentos"}.get(
+    return {"pedidos": "Pedidos", "pagamentos": "Pagamentos"}.get(
         resource, resource.replace("-", " ").title()
     )
 
@@ -46,13 +60,19 @@ def documented_responses(endpoint: Endpoint) -> dict:
         payload_schema = json_content.get("schema", {})
         envelope = {
             "type": "object",
-            "required": ["status_code", "data", "parameters", "request_body", "context"],
+            "required": ["codigo_status", "dados"],
             "properties": {
-                "status_code": {"type": "integer", "example": int(key)},
-                "data": payload_schema,
-                "parameters": {"type": "object", "additionalProperties": True},
-                "request_body": {"anyOf": [{"type": "object"}, {"type": "null"}]},
-                "context": {"type": "object", "additionalProperties": True},
+                "codigo_status": {"type": "integer", "example": int(key)},
+                "dados": payload_schema,
+                "diagnostico": {
+                    "type": "object",
+                    "description": "Incluído somente com X-Debug: true. Não faz parte dos dados do pedido.",
+                    "properties": {
+                        "parametros": {"type": "object", "additionalProperties": True},
+                        "corpo_requisicao": {"anyOf": [{"type": "object"}, {"type": "null"}]},
+                        "contexto": {"type": "object", "additionalProperties": True},
+                    },
+                },
             },
         }
         content = {"schema": envelope}
@@ -66,12 +86,12 @@ def documented_responses(endpoint: Endpoint) -> dict:
                     if "value" in example:
                         example["value"] = _example(int(key), example["value"])
         responses[int(key)] = {
-            "description": response.get("description", "Operação realizada") + ". O recurso está em data.",
+            "description": response.get("description", "Operação realizada") + ". O recurso está em dados.",
             "content": {"application/json": content},
         }
 
     errors = {
-        400: ("Dados incompatíveis com o contrato", "Request body não corresponde ao schema"),
+        400: ("Dados incompatíveis com o contrato", "Dados inválidos. Confira os campos obrigatórios e os limites descritos na documentação."),
         404: ("Recurso não encontrado nesta sessão", "Recurso não encontrado na sessão"),
         429: ("Limite do serviço de geração; tente novamente mais tarde", "Limite de requisições do serviço de geração excedido"),
         503: ("Geração indisponível ou resposta inválida; tente novamente", "Serviço de geração indisponível"),
@@ -84,13 +104,13 @@ def documented_responses(endpoint: Endpoint) -> dict:
             "content": {"application/json": {
                 "schema": {
                     "type": "object",
-                    "required": ["status_code", "message"],
+                    "required": ["codigo_status", "mensagem"],
                     "properties": {
-                        "status_code": {"type": "integer"},
-                        "message": {"type": "string"},
+                        "codigo_status": {"type": "integer"},
+                        "mensagem": {"type": "string"},
                     },
                 },
-                "example": {"status_code": status, "message": message},
+                "example": {"codigo_status": status, "mensagem": message},
             }},
         }
     return responses
@@ -98,9 +118,6 @@ def documented_responses(endpoint: Endpoint) -> dict:
 
 def _example(status: int, payload) -> dict:
     return {
-        "status_code": status,
-        "data": payload,
-        "parameters": {},
-        "request_body": None,
-        "context": {},
+        "codigo_status": status,
+        "dados": payload,
     }

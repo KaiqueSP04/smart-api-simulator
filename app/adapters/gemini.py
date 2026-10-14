@@ -4,6 +4,7 @@ import os
 import time
 
 from google import genai
+from .gemini_schema import to_gemini_schema
 from ..application.results import SimulationContext
 from ..application.ports import GenerationRateLimited, GenerationTimeout
 
@@ -83,7 +84,7 @@ class GeminiResponseGenerator:
             response_format={
                 "type": "text",
                 "mime_type": "application/json",
-                "schema": response_schema
+                "schema": to_gemini_schema(response_schema)
             },
             generation_config={
                 "thinking_config": {

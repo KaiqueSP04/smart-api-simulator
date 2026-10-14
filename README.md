@@ -1,16 +1,14 @@
 # Smart API Simulator
 
-Protótipo de uma plataforma para simulação inteligente de APIs REST a partir de contratos OpenAPI.
+Plataforma para simulação inteligente de APIs REST a partir de contratos OpenAPI.
 
 O **Smart API Simulator** interpreta contratos OpenAPI, identifica endpoints, parâmetros e schemas, e disponibiliza uma API simulada capaz de gerar respostas dinamicamente de acordo com o contrato recebido. O sistema também mantém estado entre requisições de uma mesma sessão, permitindo representar fluxos encadeados de forma coerente.
-
-O projeto é desenvolvido como parte de um Trabalho de Conclusão de Curso (TCC).
 
 ---
 
 ## Objetivo
 
-O objetivo do projeto é desenvolver e validar um protótipo de simulador de APIs REST baseado em contratos OpenAPI, utilizando um modelo de linguagem para geração dinâmica de respostas.
+O objetivo do projeto é simular APIs REST a partir de contratos OpenAPI, utilizando um modelo de linguagem para geração dinâmica de respostas.
 
 O sistema considera:
 
@@ -38,9 +36,11 @@ Os contratos são declarados como `Protocol` em `app/application/ports.py`. `Sim
 
 O motor retorna `SimulationResult`, uma dataclass com o recurso gerado ou uma `SimulationFailure` categorizada por `FailureKind`. Ele não decide códigos HTTP para falhas. O contexto é descrito por `SimulationContext` (`TypedDict`), preservando o formato JSON utilizado pelo gerador. Essas estruturas ficam em `app/application/results.py`; as convenções de identificação e criação de recursos ficam centralizadas em `app/application/resource_rules.py`.
 
-O adaptador `app/adapters/http_results.py` traduz os resultados da aplicação para códigos HTTP e para o envelope público (`status_code`, `data`, `parameters`, `request_body`, `context`; ou `status_code` e `message` para falhas). O código de sucesso vem da chave de resposta do contrato OpenAPI. A porta `RequestLog` recebe o resultado tipado; o adaptador MongoDB traduz esse resultado para manter o formato do histórico. Mensagens da aplicação referem-se ao serviço de geração, permitindo trocar o fornecedor de IA.
+O adaptador `app/adapters/http_results.py` traduz os resultados da aplicação para códigos HTTP e para o envelope público (`codigo_status` e `dados`; ou `codigo_status` e `mensagem` para falhas). Com `X-Debug: true`, respostas de sucesso também incluem `diagnostico`, separado dos dados principais. O código de sucesso vem da chave de resposta do contrato OpenAPI. A porta `RequestLog` recebe o resultado tipado; o adaptador MongoDB traduz esse resultado para manter o formato do histórico. Mensagens da aplicação referem-se ao serviço de geração, permitindo trocar o fornecedor de IA.
 
-Para consumidores Python do motor, use `result.data`, `result.failure` e `result.response_key`, em vez de acessar um dicionário HTTP. O formato JSON servido pela API permanece o mesmo.
+Para consumidores Python do motor, use `result.data`, `result.failure` e `result.response_key`, em vez de acessar um dicionário HTTP. A versão 2.0 adota campos, situações e rotas em português: `/pedidos`, `/pagamentos`, `/confirmar` e `/cancelar`. Clientes da versão anterior precisam atualizar as chamadas. Comece com um novo `X-Session-ID`, pois recursos antigos não são convertidos para o novo contrato.
+
+`OrderCalculation` implementa a porta `ResponseNormalizer` e é injetado no ponto de composição. Na criação de pedidos, preserva nome e itens enviados e calcula `total` com `Decimal` antes da validação e persistência. O modelo continua fornecendo o ID; o total não depende da IA. Outros contratos podem utilizar outro normalizador ou nenhum.
 
 O fluxo principal do sistema é:
 
@@ -85,6 +85,8 @@ Adaptador que implementa a porta ResponseGenerator e isola a comunicação com o
 
 O adapter constrói o prompt a partir do contexto, envia a solicitação ao Gemini, solicita respostas em JSON estruturado de acordo com o schema, retorna o conteúdo gerado e possui controle de timeout próprio e confiável.
 
+Antes do envio, `app/adapters/gemini_schema.py` adapta uma cópia do schema: converte limites exclusivos booleanos do OpenAPI 3.0 para limites numéricos e omite `maxItems`, cujo valor 100 foi rejeitado pelo modelo configurado. O contrato, o Swagger e a validação local continuam usando as regras originais, inclusive o limite de 100 itens. A adaptação não reduz o limite de compras para 10 itens.
+
 O prompt é montado de forma genérica a partir do contexto (sem qualquer dado fixo de domínio) e instrui o modelo a:
 
 preencher os campos exigidos pelo response schema com valores plausíveis;
@@ -115,7 +117,7 @@ Exemplo:
 X-Session-ID: teste-001
 Quando uma requisição utiliza um identificador de sessão existente, o estado correspondente é recuperado e incorporado ao contexto utilizado durante a simulação.
 
-O estado é acumulado de forma genérica, indexado pelo tipo de recurso (derivado do caminho do endpoint) e pelo id retornado na resposta. Por exemplo, após criar um pedido, o estado passa a conter esse pedido; ao processar um pagamento na mesma sessão, o modelo tem acesso ao pedido criado e pode gerar uma resposta coerente (mantendo, por exemplo, o mesmo order_id).
+O estado é acumulado de forma genérica, indexado pelo tipo de recurso (derivado do caminho do endpoint) e pelo id retornado na resposta. Por exemplo, após criar um pedido, o estado passa a conter esse pedido; ao processar um pagamento na mesma sessão, o modelo tem acesso ao pedido criado e pode gerar uma resposta coerente (mantendo, por exemplo, o mesmo pedido_id).
 
 Esse mecanismo é o que permite representar fluxos encadeados, como criação de pedido seguida de processamento e confirmação de pagamento.
 
@@ -162,6 +164,9 @@ smart-api-simulator/
 │   ├── models.py               # modelos do contrato
 │   ├── application/
 │   │   ├── ports.py            # contratos consumidos pela aplicação
+│   │   ├── results.py          # resultados tipados e contexto
+│   │   ├── resource_rules.py   # convenções dos recursos
+│   │   ├── order_calculation.py # cálculo determinístico do pedido
 │   │   ├── simulation_engine.py
 │   │   ├── response_generation.py
 │   │   ├── session_resources.py
@@ -169,6 +174,9 @@ smart-api-simulator/
 │   │   └── validator.py
 │   └── adapters/
 │       ├── http_api.py         # entrada FastAPI
+│       ├── http_results.py     # respostas públicas e diagnóstico opcional
+│       ├── swagger_docs.py     # instruções e schemas da documentação
+│       ├── swagger_view.py     # apresentação visual do Swagger
 │       ├── openapi_parser.py
 │       ├── gemini.py
 │       ├── mongodb_sessions.py
@@ -238,16 +246,20 @@ A aplicação ficará disponível em http://127.0.0.1:8000 e a documentação in
 
 ### Usando o Swagger
 
-A página `/docs` apresenta um roteiro de uso e grupos de **Pedidos**, **Pagamentos** e **Sistema**, com filtro de operações e exibição do tempo da requisição. Os schemas de resposta documentam o envelope real: o recurso fica em `data`, inclusive nas respostas de criação com código 201. Os erros da simulação incluem exemplos de `status_code` e `message`; erros de parâmetros ou corpo detectados pelo FastAPI usam 422 e `detail`.
+A página `/docs` apresenta um cabeçalho visual, instruções de preenchimento e grupos de **Pedidos**, **Pagamentos** e **Sistema**, com filtro de operações e exibição do tempo da requisição. Os schemas de resposta documentam o envelope real: o recurso fica em `dados`, inclusive nas respostas de criação com código 201. Os erros da simulação incluem exemplos de `codigo_status` e `mensagem`; erros de parâmetros ou corpo detectados pelo FastAPI usam 422 e `detail`.
 
-1. Abra `POST /orders`, clique em **Try it out** e use o exemplo preenchido. Envie a requisição com `X-Session-ID: checkout-demo-001`.
-2. Anote o `id` retornado em `data.id`.
-3. Use esse id em `GET /orders/{id}` ou em `POST /payments`. Reutilize exatamente o mesmo `X-Session-ID` para compartilhar o estado da sessão.
-4. Para processar o pagamento, preencha `order_id` com o id do pedido criado. Em seguida, use o `id` retornado pelo pagamento nas operações de consulta, confirmação ou cancelamento.
+1. Abra `POST /pedidos`, clique em **Try it out** e use o exemplo preenchido. Envie a requisição com `X-Session-ID: checkout-demo-001`.
+2. Confira `dados.total` e anote o `id` retornado em `dados.id`.
+3. Use esse id em `GET /pedidos/{id}` ou em `POST /pagamentos`. Reutilize exatamente o mesmo `X-Session-ID` para compartilhar o estado da sessão.
+4. Para processar o pagamento, preencha apenas `pedido_id` com o id do pedido criado e `metodo` com `cartao_credito`, `cartao_debito`, `pix` ou `boleto`. Repita o `X-Session-ID` da criação: o valor vem automaticamente do pedido armazenado. Em seguida, use o `id` retornado pelo pagamento nas operações de consulta, confirmação ou cancelamento.
+
+Deixe `X-Debug` em `false` para uma resposta simples. Com `true`, a resposta de sucesso inclui `diagnostico.parametros`, `diagnostico.corpo_requisicao` e `diagnostico.contexto`. O contexto técnico mantém os nomes internos dos schemas e das portas. Esse modo mostra os detalhes da chamada atual; não é uma consulta posterior de logs.
 
 Os exemplos exibidos nos campos do Swagger são definidos no contrato OpenAPI em `contracts/test-api.yaml`. Os resumos, descrições, exemplos do corpo, parâmetros de caminho e orientações do cabeçalho de sessão vêm desse contrato e do adaptador HTTP.
 
-Nos corpos JSON, o exemplo inclui todos os campos declarados no schema. Para criar um pedido, use `customer_name` e `total` (não `customer`). Para processar um pagamento, informe `order_id`, `amount` e `method`.
+Para criar um pedido, use `nome_cliente` e `itens`. Cada item contém `nome_produto`, `quantidade` e `preco_unitario`. Não envie `total`: o sistema calcula a soma de quantidade × preço unitário. Quantidades devem ser inteiras e positivas, preços positivos com até duas casas decimais e a lista precisa conter pelo menos um item. Para processar um pagamento, informe apenas `pedido_id` e `metodo`, com o mesmo `X-Session-ID` do pedido. O campo `valor` aparece na resposta e é obtido do total armazenado, independentemente do que a IA gerar.
+
+`CommerceRules`, em `app/application/payment_rules.py`, é injetado como política de requisição e normalizador de respostas. Antes da geração, verifica sessão, existência do pedido, situação `criado` e total válido. Sem sessão retorna 400; pedido ausente na sessão retorna 404; pedido cancelado retorna 400. O pagamento é integral e não inclui parcelamento. Essa política também delega o cálculo de pedidos a `OrderCalculation`.
 
 Nuvem (Railway)
 A aplicação também é publicada em nuvem na plataforma Railway, por meio de deploy automático a partir do repositório GitHub. O Procfile define o comando de inicialização, e as credenciais (GEMINI_API_KEY e MONGODB_URI) são configuradas como variáveis de ambiente na plataforma. Dessa forma, os endpoints simulados ficam acessíveis publicamente pela internet, sem necessidade de servidor local.
@@ -255,28 +267,36 @@ A aplicação também é publicada em nuvem na plataforma Railway, por meio de d
 Testando a API
 O contrato de teste atualmente utilizado está em contracts/test-api.yaml. A partir dele, o sistema registra automaticamente os endpoints definidos no contrato. O contrato de exemplo descreve um domínio de pedidos e pagamentos de e-commerce, com os endpoints:
 
-POST /orders — cria um pedido;
-GET /orders/{id} — consulta um pedido;
-POST /payments — processa um pagamento;
-POST /payments/{id}/confirm — confirma um pagamento;
-GET /payments/{id} — consulta um pagamento.
+POST /pedidos — cria um pedido;
+GET /pedidos/{id} — consulta um pedido;
+POST /pagamentos — processa um pagamento;
+POST /pagamentos/{id}/confirmar — confirma um pagamento;
+GET /pagamentos/{id} — consulta um pagamento.
 Exemplo: criar um pedido
-POST /orders
+POST /pedidos
 Com o corpo:
 
+```json
 {
-  "customer_name": "João Silva",
-  "total": 3500
+  "nome_cliente": "João Silva",
+  "itens": [
+    {"nome_produto": "Mouse sem fio", "quantidade": 2, "preco_unitario": 124.95},
+    {"nome_produto": "Teclado", "quantidade": 1, "preco_unitario": 150.00}
+  ]
 }
+```
+
+O total retornado será `399.90` (pode aparecer como `399.9`, que representa o mesmo número). O pedido retorna também `id`, `nome_cliente`, `itens` e `situacao: criado`.
 Exemplo: processar um pagamento
-POST /payments
+POST /pagamentos
 Com o corpo:
 
+```json
 {
-  "order_id": 101,
-  "amount": 3500,
-  "method": "credit_card"
+  "pedido_id": 101,
+  "metodo": "cartao_credito"
 }
+```
 Testando sessões e fluxos encadeados
 Uma requisição pode utilizar o identificador de sessão:
 
@@ -285,10 +305,10 @@ Quando houver estado armazenado para a sessão, ele será recuperado pelo Sessio
 
 Isso permite representar um fluxo encadeado dentro de uma mesma sessão, por exemplo:
 
-POST /orders — cria um pedido e obtém o id retornado;
-POST /payments — processa o pagamento referenciando o pedido criado (o estado da sessão já contém o pedido);
-POST /payments/{id}/confirm — confirma o pagamento.
-O uso do mesmo X-Session-ID nas três chamadas faz com que o estado seja compartilhado e a coerência seja mantida ao longo do fluxo (por exemplo, o order_id do pagamento corresponde ao pedido criado anteriormente).
+POST /pedidos — cria um pedido e obtém o id retornado;
+POST /pagamentos — processa o pagamento referenciando o pedido criado (o estado da sessão já contém o pedido);
+POST /pagamentos/{id}/confirmar — confirma o pagamento.
+O uso do mesmo X-Session-ID nas três chamadas faz com que o estado seja compartilhado e a coerência seja mantida ao longo do fluxo (por exemplo, o pedido_id do pagamento corresponde ao pedido criado anteriormente).
 
 Testes automatizados e de diagnóstico
 O projeto possui testes auxiliares para validar componentes específicos do sistema:
@@ -334,7 +354,7 @@ Possíveis melhorias futuras
  Testar o simulador com uma maior variedade de contratos e domínios
  Considerar o envio apenas do estado relevante para cada requisição
 Domínio experimental
-O domínio utilizado para validação do protótipo é o de e-commerce, com foco em: pedidos, pagamentos, processamento de pagamentos, fluxos encadeados entre endpoints e manutenção de estado entre requisições.
+O domínio utilizado para validação do simulador é o de e-commerce, com foco em: pedidos, pagamentos, processamento de pagamentos, fluxos encadeados entre endpoints e manutenção de estado entre requisições.
 
 Os testes de fluxo confirmaram que o simulador utiliza o contexto da sessão para produzir respostas coerentes ao longo desses fluxos.
 
@@ -347,9 +367,7 @@ python -m pytest tests test_simulation_engine.py -q
 Essa suíte verifica os fluxos com sessões, isolamento, retries, falhas do gerador, tradução dos resultados para HTTP e documentação OpenAPI. Os scripts de diagnóstico externos da raiz não fazem parte desse comando.
 
 Observações
-O projeto encontra-se em fase de finalização no contexto de um Trabalho de Conclusão de Curso.
-
-O contrato de teste atualmente utilizado possui escopo controlado e serve para validar o funcionamento do protótipo. A separação entre aplicação e adaptadores permite substituir integrações externas e testar o motor com implementações falsas, sem exigir um servidor Gemini ou MongoDB nos testes de unidade.
+O contrato de teste atualmente utilizado possui escopo controlado e serve para validar o funcionamento do simulador. A separação entre aplicação e adaptadores permite substituir integrações externas e testar o motor com implementações falsas, sem exigir um servidor Gemini ou MongoDB nos testes de unidade.
 
 
 **Principais atualizações:** arquitetura hexagonal leve, documentação interativa orientada ao uso, integração Gemini, registro de requisições e tratamento de respostas inválidas com até três tentativas e erro HTTP 503, sem fallback.

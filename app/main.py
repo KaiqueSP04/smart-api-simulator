@@ -11,6 +11,7 @@ from .adapters.mongodb_request_logger import RequestLogger
 from .adapters.mongodb_sessions import SessionManager
 from .adapters.openapi_parser import get_endpoints, parse_openapi
 from .application.context_builder import ContextBuilder
+from .application.payment_rules import CommerceRules
 from .application.response_generation import ResponseGenerationService
 from .application.session_resources import SessionResources
 from .application.simulation_engine import SimulationEngine
@@ -36,10 +37,12 @@ def create_app():
     response_generator = GeminiResponseGenerator()
     validator = PayloadValidator()
     context_builder = ContextBuilder(contract)
+    commerce_rules = CommerceRules()
     response_generation = ResponseGenerationService(
         response_generator,
         validator,
         session_resources,
+        normalizer=commerce_rules,
     )
     simulation_engine = SimulationEngine(
         endpoints=endpoints,
@@ -48,6 +51,7 @@ def create_app():
         response_generation=response_generation,
         validator=validator,
         request_logger=request_log,
+        request_policy=commerce_rules,
     )
 
     @asynccontextmanager

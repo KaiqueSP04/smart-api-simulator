@@ -1,114 +1,244 @@
 openapi: 3.0.3
-
 info:
-  title: E-commerce Orders and Payments API
-  version: 1.0.0
-
+  title: API de Pedidos e Pagamentos
+  version: 2.0.0
 paths:
-
-  /orders:
+  /pedidos:
     post:
       summary: Cria um pedido
-      description: |
-        Cria um pedido e retorna o identificador do recurso.
+      description: 'Cria um pedido e retorna o identificador do recurso.
+
         Para consultar ou alterar esse pedido, envie o mesmo X-Session-ID
+
         nas requisições seguintes.
+
+
+        O sistema mantém os itens informados e calcula o total sem depender da IA.
+
+        '
       requestBody:
         required: true
-        description: Informe o cliente e o valor total do pedido.
+        description: Preencha o nome e os itens. O total é calculado automaticamente; não o envie.
         content:
           application/json:
             examples:
               pedido_completo:
-                summary: Exemplo completo de pedido
-                description: Preencha o nome do cliente e o valor total.
+                summary: Um produto, duas unidades
                 value:
-                  customer_name: Maria Silva
-                  total: 249.90
+                  nome_cliente: Maria Silva
+                  itens:
+                  - &id001
+                    nome_produto: Mouse sem fio
+                    quantidade: 2
+                    preco_unitario: 124.95
+              dois_produtos:
+                summary: Dois produtos — total de R$ 399,90
+                value:
+                  nome_cliente: Maria Silva
+                  itens:
+                  - *id001
+                  - nome_produto: Teclado
+                    quantidade: 1
+                    preco_unitario: 150.0
             schema:
               type: object
+              additionalProperties: false
               required:
-                - customer_name
-                - total
+              - nome_cliente
+              - itens
               properties:
-                customer_name:
+                nome_cliente:
                   type: string
+                  minLength: 1
+                  maxLength: 200
                   description: Nome completo do cliente.
                   example: Maria Silva
-                total:
-                  type: number
-                  description: Valor total do pedido.
-                  example: 249.90
+                itens:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  description: Adicione um objeto para cada produto diferente. Para repetir o mesmo produto, aumente
+                    quantidade.
+                  items:
+                    type: object
+                    additionalProperties: false
+                    required:
+                    - nome_produto
+                    - quantidade
+                    - preco_unitario
+                    properties:
+                      nome_produto:
+                        type: string
+                        minLength: 1
+                        maxLength: 200
+                        description: Nome do produto comprado.
+                        example: Mouse sem fio
+                      quantidade:
+                        type: integer
+                        minimum: 1
+                        maximum: 1000000
+                        description: Número de unidades. Use um inteiro maior que zero.
+                        example: 2
+                      preco_unitario:
+                        type: number
+                        minimum: 0
+                        exclusiveMinimum: true
+                        maximum: 1000000000
+                        multipleOf: 0.01
+                        description: 'Preço de uma unidade em reais, com até duas casas decimais. No JSON, use ponto:
+                          124.95.'
+                        example: 124.95
       responses:
-        "201":
+        '201':
           description: Pedido criado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - customer_name
-                  - total
-                  - status
+                - id
+                - nome_cliente
+                - itens
+                - total
+                - situacao
                 properties:
                   id:
                     type: integer
-                  customer_name:
+                  nome_cliente:
                     type: string
                   total:
                     type: number
-                  status:
+                    description: 'Soma calculada pelo sistema: quantidade × preço unitário de cada item.'
+                  situacao:
                     type: string
-                    enum: [created]
-
-  /orders/{id}:
+                    enum:
+                    - criado
+                  itens:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    description: Adicione um objeto para cada produto diferente. Para repetir o mesmo produto, aumente
+                      quantidade.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                      - nome_produto
+                      - quantidade
+                      - preco_unitario
+                      properties:
+                        nome_produto:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          description: Nome do produto comprado.
+                          example: Mouse sem fio
+                        quantidade:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000
+                          description: Número de unidades. Use um inteiro maior que zero.
+                          example: 2
+                        preco_unitario:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1000000000
+                          multipleOf: 0.01
+                          description: 'Preço de uma unidade em reais, com até duas casas decimais. No JSON, use
+                            ponto: 124.95.'
+                          example: 124.95
+  /pedidos/{id}:
     get:
       summary: Consulta um pedido
-      description: |
-        Informe o id retornado ao criar o pedido e use o mesmo X-Session-ID
-        enviado na criação. Exemplo: crie o pedido com POST /orders e depois
-        consulte GET /orders/{id} com id 101.
+      description: 'Informe o id retornado ao criar o pedido e use o mesmo X-Session-ID
+
+        enviado na criação. Exemplo: crie o pedido com POST /pedidos e depois
+
+        consulte GET /pedidos/{id} com id 101.
+
+        '
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID retornado pela criação do pedido (POST /orders).
-          example: 101
-          schema:
-            type: integer
+      - name: id
+        in: path
+        required: true
+        description: ID retornado pela criação do pedido (POST /pedidos).
+        example: 101
+        schema:
+          type: integer
       responses:
-        "200":
+        '200':
           description: Pedido encontrado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - customer_name
-                  - total
-                  - status
+                - id
+                - nome_cliente
+                - itens
+                - total
+                - situacao
                 properties:
                   id:
                     type: integer
-                  customer_name:
+                  nome_cliente:
                     type: string
                   total:
                     type: number
-                  status:
+                    description: 'Soma calculada pelo sistema: quantidade × preço unitário de cada item.'
+                  situacao:
                     type: string
-                    enum: [created, cancelled]
-
-  /payments:
+                    enum:
+                    - criado
+                    - cancelado
+                  itens:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    description: Adicione um objeto para cada produto diferente. Para repetir o mesmo produto, aumente
+                      quantidade.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                      - nome_produto
+                      - quantidade
+                      - preco_unitario
+                      properties:
+                        nome_produto:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          description: Nome do produto comprado.
+                          example: Mouse sem fio
+                        quantidade:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000
+                          description: Número de unidades. Use um inteiro maior que zero.
+                          example: 2
+                        preco_unitario:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1000000000
+                          multipleOf: 0.01
+                          description: 'Preço de uma unidade em reais, com até duas casas decimais. No JSON, use
+                            ponto: 124.95.'
+                          example: 124.95
+  /pagamentos:
     post:
       summary: Processa um pagamento
-      description: |
-        Processa o pagamento de um pedido. Em um fluxo encadeado, use o
-        order_id retornado por POST /orders e mantenha o mesmo X-Session-ID.
+      description: 'Processa o pagamento de um pedido. Em um fluxo encadeado, use o
+
+        pedido_id retornado por POST /pedidos e mantenha o mesmo X-Session-ID.
+        O valor é obtido automaticamente do total do pedido nesta sessão.
+
+        '
       requestBody:
         required: true
-        description: Informe o pedido, o valor e o método de pagamento.
+        description: Informe apenas o pedido e o método. Use a sessão da criação do pedido; o valor é automático.
         content:
           application/json:
             examples:
@@ -116,183 +246,227 @@ paths:
                 summary: Exemplo completo de pagamento
                 description: Use o id de um pedido criado na mesma sessão.
                 value:
-                  order_id: 101
-                  amount: 249.90
-                  method: credit_card
+                  pedido_id: 101
+                  metodo: cartao_credito
             schema:
               type: object
               required:
-                - order_id
-                - amount
-                - method
+              - pedido_id
+              - metodo
               properties:
-                order_id:
+                pedido_id:
                   type: integer
-                  description: ID do pedido retornado por POST /orders.
+                  description: ID do pedido retornado por POST /pedidos.
                   example: 101
-                amount:
-                  type: number
-                  description: Valor do pagamento.
-                  example: 249.90
-                method:
+                metodo:
                   type: string
                   description: Método de pagamento utilizado.
-                  example: credit_card
+                  example: cartao_credito
+                  enum:
+                  - cartao_credito
+                  - cartao_debito
+                  - pix
+                  - boleto
+              additionalProperties: false
       responses:
-        "201":
+        '201':
           description: Pagamento processado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - order_id
-                  - amount
-                  - method
-                  - status
+                - id
+                - pedido_id
+                - valor
+                - metodo
+                - situacao
                 properties:
                   id:
                     type: integer
-                  order_id:
+                  pedido_id:
                     type: integer
-                  amount:
+                  valor:
                     type: number
-                  method:
+                  metodo:
                     type: string
-                  status:
+                  situacao:
                     type: string
-
-  /payments/{id}/confirm:
+                    enum:
+                    - pendente
+  /pagamentos/{id}/confirmar:
     post:
       summary: Confirma um pagamento
-      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
+      description: Informe o id retornado por POST /pagamentos e use o mesmo X-Session-ID.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID do pagamento retornado por POST /payments.
-          example: 201
-          schema:
-            type: integer
+      - name: id
+        in: path
+        required: true
+        description: ID do pagamento retornado por POST /pagamentos.
+        example: 201
+        schema:
+          type: integer
       responses:
-        "200":
+        '200':
           description: Pagamento confirmado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - order_id
-                  - status
+                - id
+                - pedido_id
+                - situacao
                 properties:
                   id:
                     type: integer
-                  order_id:
+                  pedido_id:
                     type: integer
-                  status:
+                  situacao:
                     type: string
-
-  /payments/{id}:
+                    enum:
+                    - confirmado
+  /pagamentos/{id}:
     get:
       summary: Consulta um pagamento
-      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
+      description: Informe o id retornado por POST /pagamentos e use o mesmo X-Session-ID.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID do pagamento retornado por POST /payments.
-          example: 201
-          schema:
-            type: integer
+      - name: id
+        in: path
+        required: true
+        description: ID do pagamento retornado por POST /pagamentos.
+        example: 201
+        schema:
+          type: integer
       responses:
-        "200":
+        '200':
           description: Pagamento encontrado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - order_id
-                  - amount
-                  - method
-                  - status
+                - id
+                - pedido_id
+                - valor
+                - metodo
+                - situacao
                 properties:
                   id:
                     type: integer
-                  order_id:
+                  pedido_id:
                     type: integer
-                  amount:
+                  valor:
                     type: number
-                  method:
+                  metodo:
                     type: string
-                  status:
+                  situacao:
                     type: string
-
-  /orders/{id}/cancel:
+                    enum:
+                    - pendente
+                    - confirmado
+                    - cancelado
+  /pedidos/{id}/cancelar:
     post:
       summary: Cancela um pedido
-      description: Informe o id retornado por POST /orders e use o mesmo X-Session-ID.
+      description: Informe o id retornado por POST /pedidos e use o mesmo X-Session-ID.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID do pedido retornado por POST /orders.
-          example: 101
-          schema:
-            type: integer
+      - name: id
+        in: path
+        required: true
+        description: ID do pedido retornado por POST /pedidos.
+        example: 101
+        schema:
+          type: integer
       responses:
-        "200":
+        '200':
           description: Pedido cancelado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - customer_name
-                  - total
-                  - status
+                - id
+                - nome_cliente
+                - itens
+                - total
+                - situacao
                 properties:
                   id:
                     type: integer
-                  customer_name:
+                  nome_cliente:
                     type: string
                   total:
                     type: number
-                  status:
+                    description: 'Soma calculada pelo sistema: quantidade × preço unitário de cada item.'
+                  situacao:
                     type: string
-                    enum: [cancelled]
-
-  /payments/{id}/cancel:
+                    enum:
+                    - cancelado
+                  itens:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    description: Adicione um objeto para cada produto diferente. Para repetir o mesmo produto, aumente
+                      quantidade.
+                    items:
+                      type: object
+                      additionalProperties: false
+                      required:
+                      - nome_produto
+                      - quantidade
+                      - preco_unitario
+                      properties:
+                        nome_produto:
+                          type: string
+                          minLength: 1
+                          maxLength: 200
+                          description: Nome do produto comprado.
+                          example: Mouse sem fio
+                        quantidade:
+                          type: integer
+                          minimum: 1
+                          maximum: 1000000
+                          description: Número de unidades. Use um inteiro maior que zero.
+                          example: 2
+                        preco_unitario:
+                          type: number
+                          minimum: 0
+                          exclusiveMinimum: true
+                          maximum: 1000000000
+                          multipleOf: 0.01
+                          description: 'Preço de uma unidade em reais, com até duas casas decimais. No JSON, use
+                            ponto: 124.95.'
+                          example: 124.95
+  /pagamentos/{id}/cancelar:
     post:
       summary: Cancela um pagamento
-      description: Informe o id retornado por POST /payments e use o mesmo X-Session-ID.
+      description: Informe o id retornado por POST /pagamentos e use o mesmo X-Session-ID.
       parameters:
-        - name: id
-          in: path
-          required: true
-          description: ID do pagamento retornado por POST /payments.
-          example: 201
-          schema:
-            type: integer
+      - name: id
+        in: path
+        required: true
+        description: ID do pagamento retornado por POST /pagamentos.
+        example: 201
+        schema:
+          type: integer
       responses:
-        "200":
+        '200':
           description: Pagamento cancelado
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - id
-                  - order_id
-                  - status
+                - id
+                - pedido_id
+                - situacao
                 properties:
                   id:
                     type: integer
-                  order_id:
+                  pedido_id:
                     type: integer
-                  status:
+                  situacao:
                     type: string
+                    enum:
+                    - cancelado

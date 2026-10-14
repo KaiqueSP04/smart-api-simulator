@@ -8,6 +8,7 @@ from .ports import (
     GenerationRateLimited,
     GenerationTimeout,
     ResponseGenerator,
+    ResponseNormalizer,
 )
 from .session_resources import SessionResources
 from .resource_rules import get_resource_type, is_creation
@@ -31,11 +32,13 @@ class ResponseGenerationService:
         validator: PayloadValidator,
         session_resources: SessionResources,
         attempts: int = 3,
+        normalizer: ResponseNormalizer | None = None,
     ):
         self.response_generator = response_generator
         self.validator = validator
         self.session_resources = session_resources
         self.attempts = attempts
+        self.normalizer = normalizer
 
     async def generate(
         self,
@@ -75,6 +78,9 @@ class ResponseGenerationService:
 
             if response_data is None:
                 continue
+
+            if self.normalizer is not None:
+                response_data = self.normalizer.normalize(context, response_data)
 
             if response_schema and not self.validator.validate(
                 response_data, response_schema

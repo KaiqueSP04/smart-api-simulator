@@ -14,17 +14,18 @@ FAILURE_STATUS_CODES = {
 }
 
 
-def to_http_response(result: SimulationResult) -> tuple[int, dict]:
+def to_http_response(result: SimulationResult, debug: bool = False) -> tuple[int, dict]:
     if result.failure is not None:
         status = FAILURE_STATUS_CODES[result.failure.kind]
-        return status, {"status_code": status, "message": result.failure.message}
+        return status, {"codigo_status": status, "mensagem": result.failure.message}
 
     # The response key comes from the OpenAPI contract, not an application error.
     status = int(result.response_key or "200")
-    return status, {
-        "status_code": status,
-        "data": result.data,
-        "parameters": result.parameters or {},
-        "request_body": result.request_body,
-        "context": result.context,
-    }
+    content = {"codigo_status": status, "dados": result.data}
+    if debug:
+        content["diagnostico"] = {
+            "parametros": result.parameters or {},
+            "corpo_requisicao": result.request_body,
+            "contexto": result.context,
+        }
+    return status, content

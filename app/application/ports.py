@@ -1,6 +1,6 @@
-from typing import Protocol
+from typing import Any, Protocol
 
-from .results import SimulationContext, SimulationResult
+from .results import SimulationContext, SimulationResult, SimulationFailure
 
 
 class SessionStore(Protocol):
@@ -15,6 +15,14 @@ class SessionStore(Protocol):
 
 class ResponseGenerator(Protocol):
     async def generate(self, context: SimulationContext) -> str: ...
+
+
+class ResponseNormalizer(Protocol):
+    def normalize(self, context: SimulationContext, data: Any) -> Any: ...
+
+
+class RequestPolicy(Protocol):
+    def validate(self, context: SimulationContext, session_id: str | None) -> SimulationFailure | None: ...
 
 
 class RequestLog(Protocol):

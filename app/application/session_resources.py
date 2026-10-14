@@ -54,8 +54,9 @@ class SessionResources:
         existing_data = resources.get(entity_id)
         if isinstance(existing_data, dict) and existing_data:
             updated_data = existing_data.copy()
-            if "status" in response_data:
-                updated_data["status"] = response_data["status"]
+            for field in ("status", "situacao"):
+                if field in response_data:
+                    updated_data[field] = response_data[field]
             resources[entity_id] = updated_data
         else:
             resources[entity_id] = response_data

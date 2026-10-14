@@ -5,6 +5,8 @@ import json
 import pytest
 import yaml
 
+from app.application.payment_rules import CommerceRules
+
 from app.adapters.http_results import to_http_response
 from app.models import Endpoint
 from app.application.context_builder import ContextBuilder
@@ -47,7 +49,7 @@ class FakeLogger:
         self.records.append({
             "path": path,
             "method": method,
-            "status_code": to_http_response(result)[0],
+            "codigo_status": to_http_response(result)[0],
             "latency_ms": latency_ms,
             "valid": result.failure is None,
             "fallback": False,
@@ -70,8 +72,8 @@ def environment():
     endpoints = []
 
     for path, operations in contract["paths"].items():
-        for method, operation in operations.items():
-            if method.lower() not in {
+        for metodo, operation in operations.items():
+            if metodo.lower() not in {
                 "get", "post", "put", "patch", "delete"
             }:
                 continue
@@ -79,7 +81,7 @@ def environment():
             endpoints.append(
                 Endpoint(
                     path=path,
-                    method=method.upper(),
+                    method=metodo.upper(),
                     summary=operation.get("summary"),
                     parameters=[
                         {
@@ -104,6 +106,7 @@ def environment():
         response_generator,
         validator,
         session_resources,
+        normalizer=CommerceRules(),
     )
 
     engine = SimulationEngine(
@@ -113,6 +116,7 @@ def environment():
         response_generation=response_generation,
         validator=validator,
         request_logger=logger,
+        request_policy=CommerceRules(),
     )
 
     return engine, sessions, logger
@@ -141,22 +145,23 @@ def mock_responses(monkeypatch, engine, responses):
     return calls
 
 
-def order_data(order_id=101, total=175, status="created"):
+def order_data(pedido_id=101, total=175, status="criado"):
     return {
-        "id": order_id,
-        "customer_name": "Cliente Teste",
+        "id": pedido_id,
+        "nome_cliente": "Cliente Teste",
+        "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": total}],
         "total": total,
-        "status": status,
+        "situacao": status,
     }
 
 
-def payment_data(payment_id=201, status="pending"):
+def payment_data(payment_id=201, status="pendente"):
     return {
         "id": payment_id,
-        "order_id": 101,
-        "amount": 175,
-        "method": "credit_card",
-        "status": status,
+        "pedido_id": 101,
+        "valor": 175,
+        "metodo": "cartao_credito",
+        "situacao": status,
     }
 
 
@@ -170,28 +175,28 @@ async def test_criacao_e_consulta_de_pedido(environment, monkeypatch):
         [order_data()],
     )
 
-    created = await simulate_http(engine,
-        "/orders",
+    criado = await simulate_http(engine,
+        "/pedidos",
         "POST",
         request_body={
-            "customer_name": "Cliente Teste",
-            "total": 175,
+            "nome_cliente": "Cliente Teste",
+            "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}],
         },
         session_id="sessaoA",
     )
 
-    assert created["status_code"] == 201
-    assert created["data"] == order_data()
+    assert criado["codigo_status"] == 201
+    assert criado["dados"] == order_data()
 
     consulted = await simulate_http(engine,
-        "/orders/{id}",
+        "/pedidos/{id}",
         "GET",
         parameters={"id": 101},
         session_id="sessaoA",
     )
 
-    assert consulted["status_code"] == 200
-    assert consulted["data"] == order_data()
+    assert consulted["codigo_status"] == 200
+    assert consulted["dados"] == order_data()
     assert len(calls) == 1
     assert len(logger.records) == 2
 
@@ -203,23 +208,23 @@ async def test_isolamento_entre_sessoes(environment, monkeypatch):
     mock_responses(monkeypatch, engine, [order_data()])
 
     await simulate_http(engine,
-        "/orders",
+        "/pedidos",
         "POST",
         request_body={
-            "customer_name": "Cliente Teste",
-            "total": 175,
+            "nome_cliente": "Cliente Teste",
+            "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}],
         },
         session_id="sessaoA",
     )
 
     result = await simulate_http(engine,
-        "/orders/{id}",
+        "/pedidos/{id}",
         "GET",
         parameters={"id": 101},
         session_id="sessaoB",
     )
 
-    assert result["status_code"] == 404
+    assert result["codigo_status"] == 404
     assert await sessions.get_session("sessaoB") is None
 
 
@@ -229,29 +234,29 @@ async def test_cancelamento_preserva_dados(environment, monkeypatch):
 
     await sessions.save_session(
         "sessaoA",
-        {"orders": {"101": order_data()}},
+        {"pedidos": {"101": order_data()}},
     )
 
     calls = mock_responses(
         monkeypatch,
         engine,
-        [order_data(total=9999, status="cancelled")],
+        [order_data(total=9999, status="cancelado")],
     )
 
     result = await simulate_http(engine,
-        "/orders/{id}/cancel",
+        "/pedidos/{id}/cancelar",
         "POST",
         parameters={"id": 101},
         session_id="sessaoA",
     )
 
     stored = await sessions.get_session("sessaoA")
-    saved_order = stored["orders"]["101"]
+    saved_order = stored["pedidos"]["101"]
 
-    assert result["status_code"] == 200
-    assert result["data"]["total"] == 175
-    assert result["data"]["status"] == "cancelled"
-    assert saved_order == result["data"]
+    assert result["codigo_status"] == 200
+    assert result["dados"]["total"] == 175
+    assert result["dados"]["situacao"] == "cancelado"
+    assert saved_order == result["dados"]
     assert len(calls) == 1
 
 
@@ -260,6 +265,7 @@ async def test_criacao_e_confirmacao_pagamento(
     environment, monkeypatch
 ):
     engine, sessions, logger = environment
+    await sessions.save_session("sessaoA", {"pedidos": {"101": order_data()}})
 
     mock_responses(
         monkeypatch,
@@ -268,46 +274,45 @@ async def test_criacao_e_confirmacao_pagamento(
             payment_data(),
             {
                 "id": 201,
-                "order_id": 101,
-                "status": "confirmed",
+                "pedido_id": 101,
+                "situacao": "confirmado",
             },
         ],
     )
 
-    created = await simulate_http(engine,
-        "/payments",
+    criado = await simulate_http(engine,
+        "/pagamentos",
         "POST",
         request_body={
-            "order_id": 101,
-            "amount": 175,
-            "method": "credit_card",
+            "pedido_id": 101,
+            "metodo": "cartao_credito",
         },
         session_id="sessaoA",
     )
 
-    assert created["status_code"] == 201
+    assert criado["codigo_status"] == 201
 
-    confirmed = await simulate_http(engine,
-        "/payments/{id}/confirm",
+    confirmado = await simulate_http(engine,
+        "/pagamentos/{id}/confirmar",
         "POST",
         parameters={"id": 201},
         session_id="sessaoA",
     )
 
-    assert confirmed["status_code"] == 200
-    assert confirmed["data"]["status"] == "confirmed"
-    assert confirmed["data"]["amount"] == 175
-    assert confirmed["data"]["method"] == "credit_card"
+    assert confirmado["codigo_status"] == 200
+    assert confirmado["dados"]["situacao"] == "confirmado"
+    assert confirmado["dados"]["valor"] == 175
+    assert confirmado["dados"]["metodo"] == "cartao_credito"
 
     consulted = await simulate_http(engine,
-        "/payments/{id}",
+        "/pagamentos/{id}",
         "GET",
         parameters={"id": 201},
         session_id="sessaoA",
     )
 
-    assert consulted["status_code"] == 200
-    assert consulted["data"] == confirmed["data"]
+    assert consulted["codigo_status"] == 200
+    assert consulted["dados"] == confirmado["dados"]
 
 
 @pytest.mark.asyncio
@@ -317,16 +322,16 @@ async def test_validacao_do_request_body(environment, monkeypatch):
     calls = mock_responses(monkeypatch, engine, [])
 
     result = await simulate_http(engine,
-        "/orders",
+        "/pedidos",
         "POST",
         request_body={
-            "customer_name": "Cliente Teste",
+            "nome_cliente": "Cliente Teste",
             "total": "valor_invalido",
         },
         session_id="sessaoA",
     )
 
-    assert result["status_code"] == 400
+    assert result["codigo_status"] == 400
     assert len(calls) == 0
     assert await sessions.get_session("sessaoA") is None
 
@@ -344,17 +349,17 @@ async def test_resposta_invalida_apos_tres_tentativas(
     )
 
     result = await simulate_http(engine,
-        "/orders",
+        "/pedidos",
         "POST",
         request_body={
-            "customer_name": "Cliente Teste",
-            "total": 175,
+            "nome_cliente": "Cliente Teste",
+            "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}],
         },
         session_id="sessaoA",
     )
 
-    assert result["status_code"] == 503
-    assert "data" not in result
+    assert result["codigo_status"] == 503
+    assert "dados" not in result
     assert len(calls) == 3
     assert await sessions.get_session("sessaoA") is None
 
@@ -365,21 +370,21 @@ async def test_id_incorreto_na_resposta(environment, monkeypatch):
 
     await sessions.save_session(
         "sessaoA",
-        {"orders": {"101": order_data()}},
+        {"pedidos": {"101": order_data()}},
     )
 
     calls = mock_responses(
         monkeypatch,
         engine,
         [
-            order_data(999, status="cancelled"),
-            order_data(999, status="cancelled"),
-            order_data(999, status="cancelled"),
+            order_data(999, status="cancelado"),
+            order_data(999, status="cancelado"),
+            order_data(999, status="cancelado"),
         ],
     )
 
     result = await simulate_http(engine,
-        "/orders/{id}/cancel",
+        "/pedidos/{id}/cancelar",
         "POST",
         parameters={"id": 101},
         session_id="sessaoA",
@@ -387,10 +392,10 @@ async def test_id_incorreto_na_resposta(environment, monkeypatch):
 
     state = await sessions.get_session("sessaoA")
 
-    assert result["status_code"] == 503
+    assert result["codigo_status"] == 503
     assert len(calls) == 3
-    assert state["orders"]["101"] == order_data()
-    assert "999" not in state["orders"]
+    assert state["pedidos"]["101"] == order_data()
+    assert "999" not in state["pedidos"]
 
 
 @pytest.mark.asyncio
@@ -399,7 +404,7 @@ async def test_colisao_de_id_na_criacao(environment, monkeypatch):
 
     await sessions.save_session(
         "sessaoA",
-        {"orders": {"101": order_data()}},
+        {"pedidos": {"101": order_data()}},
     )
 
     calls = mock_responses(
@@ -409,21 +414,21 @@ async def test_colisao_de_id_na_criacao(environment, monkeypatch):
     )
 
     result = await simulate_http(engine,
-        "/orders",
+        "/pedidos",
         "POST",
         request_body={
-            "customer_name": "Cliente Teste",
-            "total": 175,
+            "nome_cliente": "Cliente Teste",
+            "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}],
         },
         session_id="sessaoA",
     )
 
     state = await sessions.get_session("sessaoA")
 
-    assert result["status_code"] == 503
+    assert result["codigo_status"] == 503
     assert len(calls) == 3
-    assert state["orders"]["101"] == order_data()
-    assert len(state["orders"]) == 1
+    assert state["pedidos"]["101"] == order_data()
+    assert len(state["pedidos"]) == 1
 
 
 async def simulate_http(engine, *args, **kwargs):
@@ -454,8 +459,8 @@ async def test_generator_failures_are_transport_independent(
 
     monkeypatch.setattr(engine.response_generation.response_generator, "generate", fail)
     result = await engine.simulate(
-        "/orders", "POST",
-        request_body={"customer_name": "Cliente Teste", "total": 175},
+        "/pedidos", "POST",
+        request_body={"nome_cliente": "Cliente Teste", "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}]},
         session_id="sessaoA",
     )
     assert result.failure.kind.value == expected_kind
@@ -476,22 +481,148 @@ async def test_http_flow_preserves_envelope_and_maps_failures(environment, monke
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://test",
     ) as client:
-        created = await client.post(
-            "/orders", json={"customer_name": "Cliente Teste", "total": 175},
+        criado = await client.post(
+            "/pedidos", json={"nome_cliente": "Cliente Teste", "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}]},
             headers={"X-Session-ID": "sessaoA"},
         )
-        assert created.status_code == 201
-        assert created.json()["data"] == order_data()
-        assert created.json()["context"]["endpoint"]["path"] == "/orders"
-        found = await client.get("/orders/101", headers={"X-Session-ID": "sessaoA"})
+        assert criado.status_code == 201
+        assert criado.json()["dados"] == order_data()
+        assert set(criado.json()) == {"codigo_status", "dados"}
+        found = await client.get("/pedidos/101", headers={"X-Session-ID": "sessaoA"})
         assert found.status_code == 200
-        assert found.json()["data"] == order_data()
-        missing = await client.get("/orders/101", headers={"X-Session-ID": "sessaoB"})
+        assert found.json()["dados"] == order_data()
+        missing = await client.get("/pedidos/101", headers={"X-Session-ID": "sessaoB"})
         assert missing.status_code == 404
         assert missing.json() == {
-            "status_code": 404, "message": "Recurso não encontrado na sessão",
+            "codigo_status": 404, "mensagem": "Recurso não encontrado na sessão",
         }
-        invalid = await client.post("/orders", json={"customer_name": "Teste", "total": "x"})
+        invalid = await client.post("/pedidos", json={"nome_cliente": "Teste", "itens": []})
         assert invalid.status_code == 400
-        invalid_parameter = await client.get("/orders/abc")
+        invalid_parameter = await client.get("/pedidos/abc")
         assert invalid_parameter.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_multiple_items_total_is_calculated_and_persisted(environment, monkeypatch):
+    engine, sessions, logger = environment
+    # Deliberately wrong model output: the application must preserve the request.
+    calls = mock_responses(monkeypatch, engine, [{"id": 321, "total": 0, "nome_cliente": "Outro"}])
+    items = [
+        {"nome_produto": "Mouse sem fio", "quantidade": 2, "preco_unitario": 124.95},
+        {"nome_produto": "Teclado", "quantidade": 1, "preco_unitario": 150.0},
+    ]
+    result = await engine.simulate(
+        "/pedidos", "POST", request_body={"nome_cliente": "Maria Silva", "itens": items},
+        session_id="compra",
+    )
+    assert result.failure is None
+    assert result.data == {
+        "id": 321, "nome_cliente": "Maria Silva", "itens": items,
+        "total": 399.9, "situacao": "criado",
+    }
+    stored = await sessions.get_session("compra")
+    assert stored["pedidos"]["321"] == result.data
+    consulted = await engine.simulate("/pedidos/{id}", "GET", {"id": 321}, session_id="compra")
+    assert consulted.data == result.data
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("quantity, price", [(0, 1), (-1, 1), (1.5, 1), (True, 1), (1, 0), (1, -1), (1, 1.001)])
+async def test_invalid_item_rejected_before_generation(environment, monkeypatch, quantity, price):
+    engine, sessions, logger = environment
+    calls = mock_responses(monkeypatch, engine, [])
+    result = await engine.simulate("/pedidos", "POST", request_body={
+        "nome_cliente": "Maria", "itens": [
+            {"nome_produto": "Mouse", "quantidade": quantity, "preco_unitario": price},
+        ],
+    })
+    assert result.failure.kind.value == "invalid_request"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("body", [
+    {"nome_cliente": "Maria", "itens": []},
+    {"nome_cliente": "  ", "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 1}]},
+    {"customer_name": "Maria", "total": 250},
+    {"nome_cliente": "Maria", "total": 250, "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 1}]},
+])
+async def test_invalid_order_shape_rejected(environment, monkeypatch, body):
+    engine, sessions, logger = environment
+    calls = mock_responses(monkeypatch, engine, [])
+    result = await engine.simulate("/pedidos", "POST", request_body=body)
+    assert result.failure.kind.value == "invalid_request"
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_decimal_total_avoids_float_arithmetic_error(environment, monkeypatch):
+    engine, sessions, logger = environment
+    mock_responses(monkeypatch, engine, [{"id": 555}])
+    result = await engine.simulate("/pedidos", "POST", request_body={
+        "nome_cliente": "Maria", "itens": [
+            {"nome_produto": "Peça", "quantidade": 3, "preco_unitario": 0.1},
+        ],
+    })
+    assert result.failure is None
+    assert result.data["total"] == 0.3
+
+
+@pytest.mark.asyncio
+async def test_debug_header_opt_in_and_swagger_page(environment):
+    import httpx
+    from app.adapters.http_api import create_http_app
+
+    engine, sessions, logger = environment
+    await sessions.save_session("demo", {"pedidos": {"101": order_data()}})
+    app = create_http_app(list(engine.endpoints.values()), engine, lifespan=None)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        headers = {"X-Session-ID": "demo"}
+        simple = await client.get("/pedidos/101", headers=headers)
+        assert set(simple.json()) == {"codigo_status", "dados"}
+        detailed = await client.get("/pedidos/101", headers={**headers, "X-Debug": "true"})
+        assert detailed.json()["dados"] == simple.json()["dados"]
+        assert detailed.json()["diagnostico"]["contexto"]["session_state"] is not None
+        disabled = await client.get("/pedidos/101", headers={**headers, "X-Debug": "false"})
+        assert disabled.json() == simple.json()
+        docs = await client.get("/docs")
+        assert docs.status_code == 200
+        assert '<html lang="pt-BR">' in docs.text
+        assert 'class="docs-banner"' in docs.text
+        assert '/openapi.json' in docs.text
+
+
+@pytest.mark.asyncio
+async def test_payment_amount_and_reference_override_model_output(environment, monkeypatch):
+    engine, sessions, logger = environment
+    await sessions.save_session("compra", {"pedidos": {"101": order_data(total=2555.95)}})
+    mock_responses(monkeypatch, engine, [{"id": 201, "pedido_id": 999, "valor": 1, "metodo": "boleto"}])
+    result = await engine.simulate("/pagamentos", "POST", request_body={
+        "pedido_id": 101, "metodo": "pix",
+    }, session_id="compra")
+    assert result.failure is None
+    assert result.data == {"id": 201, "pedido_id": 101, "valor": 2555.95, "metodo": "pix", "situacao": "pendente"}
+    state = await sessions.get_session("compra")
+    assert state["pagamentos"]["201"] == result.data
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("session, order, body, expected", [
+    (None, order_data(), {"pedido_id": 101, "metodo": "pix"}, "invalid_request"),
+    ("outra", order_data(), {"pedido_id": 101, "metodo": "pix"}, "not_found"),
+    ("compra", None, {"pedido_id": 101, "metodo": "pix"}, "not_found"),
+    ("compra", order_data(status="cancelado"), {"pedido_id": 101, "metodo": "pix"}, "invalid_request"),
+    ("compra", order_data(total=-1), {"pedido_id": 101, "metodo": "pix"}, "invalid_state"),
+    ("compra", order_data(), {"pedido_id": 101, "metodo": "pix", "valor": 1}, "invalid_request"),
+])
+async def test_payment_preconditions_before_generation(environment, monkeypatch, session, order, body, expected):
+    engine, sessions, logger = environment
+    if order is not None:
+        await sessions.save_session("compra", {"pedidos": {"101": order}})
+    calls = mock_responses(monkeypatch, engine, [])
+    result = await engine.simulate("/pagamentos", "POST", request_body=body, session_id=session)
+    assert result.failure.kind.value == expected
+    assert not calls
+    state = await sessions.get_session("compra") or {}
+    assert "pagamentos" not in state

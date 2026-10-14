@@ -1,6 +1,7 @@
 import asyncio
 import json
 from app.main import app
+from app.adapters.http_results import to_http_response
 
 
 engine = app.state.simulation_engine
@@ -11,22 +12,24 @@ async def testar():
 
     pedido_original = {
         "id": 101,
-        "customer_name": "Teste Integridade",
+        "nome_cliente": "Teste Integridade",
+        "itens": [{"nome_produto": "Mouse", "quantidade": 1, "preco_unitario": 175}],
         "total": 175,
-        "status": "created"
+        "situacao": "criado"
     }
 
     await engine.session_resources.session_store.save_session(
         sessao,
-        {"orders": {"101": pedido_original.copy()}}
+        {"pedidos": {"101": pedido_original.copy()}}
     )
 
     async def resposta_inconsistente(context):
         return {
             "id": 101,
-            "customer_name": "Teste Integridade",
+            "nome_cliente": "Teste Integridade",
+            "itens": pedido_original["itens"],
             "total": 9999,
-            "status": "cancelled"
+            "situacao": "cancelado"
         }
 
     original = engine.response_generation.response_generator.generate
@@ -38,26 +41,26 @@ async def testar():
         engine.response_generation.response_generator.generate = resposta_json
 
         resultado = await engine.simulate(
-            path="/orders/{id}/cancel",
+            path="/pedidos/{id}/cancelar",
             method="POST",
             parameters={"id": "101"},
             session_id=sessao
         )
 
         estado = await engine.session_resources.session_store.get_session(sessao)
-        pedido_final = estado["orders"]["101"]
+        pedido_final = estado["pedidos"]["101"]
 
-        print("HTTP:", resultado["status_code"])
+        print("HTTP:", to_http_response(resultado)[0])
         print("Valor original:", pedido_original["total"])
         print("Valor armazenado:", pedido_final["total"])
-        print("Status armazenado:", pedido_final["status"])
+        print("Situação armazenada:", pedido_final["situacao"])
         print("Valor preservado:", pedido_final["total"] == 175)
 
-        print("Valor retornado pela API:", resultado.get("data", {}).get("total"))
+        print("Valor retornado pela API:", (resultado.data or {}).get("total"))
         print("Valor armazenado no banco:", pedido_final["total"])
         print(
             "Resposta consistente com o banco:",
-            resultado.get("data", {}).get("total") == pedido_final["total"]
+            (resultado.data or {}).get("total") == pedido_final["total"]
         )
 
     finally:

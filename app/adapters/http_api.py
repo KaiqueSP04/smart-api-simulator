@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from ..models import Endpoint
 from .http_results import to_http_response
 from .swagger_docs import DESCRIPTION, documented_responses, resource_tag
+from .swagger_view import swagger_page
 from ..application.simulation_engine import SimulationEngine
 
 
@@ -26,6 +27,7 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
     async def endpoint_handler(
         request: Request,
         x_session_id: str | None = None,
+        x_debug: bool = False,
         **kwargs,
     ):
         parameters = {
@@ -42,7 +44,7 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
             x_session_id,
         )
 
-        status_code, content = to_http_response(result)
+        status_code, content = to_http_response(result, debug=x_debug)
         return JSONResponse(status_code=status_code, content=content)
 
     signature_parameters = [
@@ -121,6 +123,17 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
         )
     )
 
+    signature_parameters.append(
+        inspect.Parameter(
+            "x_debug", inspect.Parameter.KEYWORD_ONLY,
+            annotation=bool,
+            default=Header(False, alias="X-Debug", description=(
+                "Diagnóstico opcional. Selecione true para incluir os detalhes "
+                "da simulação; false mantém apenas os dados principais."
+            )),
+        )
+    )
+
     endpoint_handler.__signature__ = inspect.Signature(
         parameters=signature_parameters
     )
@@ -130,11 +143,12 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
 def create_http_app(endpoints, engine: SimulationEngine, lifespan):
     app = FastAPI(
         title="Smart API Simulator",
-        version="0.1.0",
+        version="2.0.0",
+        docs_url=None,
         description=DESCRIPTION,
         openapi_tags=[
-            {"name": "Pedidos", "description": "Crie um pedido, copie data.id e consulte ou cancele na mesma sessão."},
-            {"name": "Pagamentos", "description": "Use o ID do pedido em order_id. O data.id do pagamento serve para consultar, confirmar ou cancelar."},
+            {"name": "Pedidos", "description": "Informe cliente e itens. O total é automático. Copie dados.id para consultar ou cancelar."},
+            {"name": "Pagamentos", "description": "Informe pedido_id e metodo na mesma sessão do pedido. O valor é automático. Use dados.id do pagamento para consultar, confirmar ou cancelar."},
             {"name": "Sistema", "description": "Verifique se a API está disponível."},
         ],
         swagger_ui_parameters={
@@ -147,10 +161,14 @@ def create_http_app(endpoints, engine: SimulationEngine, lifespan):
     )
     app.state.simulation_engine = engine
 
+    @app.get("/docs", include_in_schema=False)
+    def documentation(request: Request):
+        return swagger_page(request.scope.get("root_path", "") + app.openapi_url)
+
     @app.get("/", tags=["Sistema"], summary="Verifica se a API está disponível")
     def root():
         return {
-            "message": "Smart API Simulator funcionando!"
+            "mensagem": "Smart API Simulator funcionando!"
         }
 
     for endpoint in endpoints:
