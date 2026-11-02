@@ -1,0 +1,10 @@
+﻿operacao,tempo_ms,aprovado,erro
+Criar pedido,2843.233199993847,True,
+Consultar pedido,0.05530001362785697,True,
+Criar pagamento,2132.1185000124387,True,
+Confirmar pagamento,2211.0449000028893,True,
+Consultar pagamento,0.03060000017285347,True,
+Cancelar pagamento,2092.6685000013094,True,
+Cancelar pedido,1796.5987999923527,True,
+Consultar pedido cancelado,0.03619998460635543,True,
+Consultar pagamento cancelado,0.018000020645558834,True,

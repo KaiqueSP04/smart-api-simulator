@@ -1,0 +1,163 @@
+﻿gerador,rodada,operacao,status,tempo_ms,codigo_saida
+mock,1,Criar pedido,OK,0.2,0
+mock,1,Consultar pedido,OK,0.03,0
+mock,1,Criar pagamento,OK,0.05,0
+mock,1,Confirmar pagamento,OK,0.04,0
+mock,1,Consultar pagamento,OK,0.02,0
+mock,1,Cancelar pagamento,OK,0.04,0
+mock,1,Cancelar pedido,OK,0.06,0
+mock,1,Consultar pedido cancelado,OK,0.05,0
+mock,1,Consultar pagamento cancelado,OK,0.02,0
+gemini,1,Criar pedido,OK,13787.79,0
+gemini,1,Consultar pedido,OK,0.11,0
+gemini,1,Criar pagamento,OK,1980.13,0
+gemini,1,Confirmar pagamento,OK,1937.07,0
+gemini,1,Consultar pagamento,OK,0.09,0
+gemini,1,Cancelar pagamento,OK,2480.86,0
+gemini,1,Cancelar pedido,OK,9529.54,0
+gemini,1,Consultar pedido cancelado,OK,0.06,0
+gemini,1,Consultar pagamento cancelado,OK,0.03,0
+mock,2,Criar pedido,OK,0.18,0
+mock,2,Consultar pedido,OK,0.03,0
+mock,2,Criar pagamento,OK,0.05,0
+mock,2,Confirmar pagamento,OK,0.03,0
+mock,2,Consultar pagamento,OK,0.02,0
+mock,2,Cancelar pagamento,OK,0.03,0
+mock,2,Cancelar pedido,OK,0.05,0
+mock,2,Consultar pedido cancelado,OK,0.03,0
+mock,2,Consultar pagamento cancelado,OK,0.01,0
+gemini,2,Criar pedido,OK,2979.25,0
+gemini,2,Consultar pedido,OK,0.11,0
+gemini,2,Criar pagamento,OK,8592.43,0
+gemini,2,Confirmar pagamento,OK,1988.23,0
+gemini,2,Consultar pagamento,OK,0.09,0
+gemini,2,Cancelar pagamento,OK,2011.39,0
+gemini,2,Cancelar pedido,OK,10189.41,0
+gemini,2,Consultar pedido cancelado,OK,0.04,0
+gemini,2,Consultar pagamento cancelado,OK,0.02,0
+mock,3,Criar pedido,OK,0.19,0
+mock,3,Consultar pedido,OK,0.03,0
+mock,3,Criar pagamento,OK,0.05,0
+mock,3,Confirmar pagamento,OK,0.03,0
+mock,3,Consultar pagamento,OK,0.01,0
+mock,3,Cancelar pagamento,OK,0.03,0
+mock,3,Cancelar pedido,OK,0.06,0
+mock,3,Consultar pedido cancelado,OK,0.03,0
+mock,3,Consultar pagamento cancelado,OK,0.01,0
+gemini,3,Criar pedido,OK,2843.23,0
+gemini,3,Consultar pedido,OK,0.06,0
+gemini,3,Criar pagamento,OK,2132.12,0
+gemini,3,Confirmar pagamento,OK,2211.04,0
+gemini,3,Consultar pagamento,OK,0.03,0
+gemini,3,Cancelar pagamento,OK,2092.67,0
+gemini,3,Cancelar pedido,OK,1796.6,0
+gemini,3,Consultar pedido cancelado,OK,0.04,0
+gemini,3,Consultar pagamento cancelado,OK,0.02,0
+mock,4,Criar pedido,OK,0.18,0
+mock,4,Consultar pedido,OK,0.03,0
+mock,4,Criar pagamento,OK,0.05,0
+mock,4,Confirmar pagamento,OK,0.03,0
+mock,4,Consultar pagamento,OK,0.01,0
+mock,4,Cancelar pagamento,OK,0.03,0
+mock,4,Cancelar pedido,OK,0.06,0
+mock,4,Consultar pedido cancelado,OK,0.03,0
+mock,4,Consultar pagamento cancelado,OK,0.01,0
+gemini,4,Criar pedido,OK,3416.54,0
+gemini,4,Consultar pedido,OK,0.04,0
+gemini,4,Criar pagamento,OK,2086.51,0
+gemini,4,Confirmar pagamento,OK,1634.48,0
+gemini,4,Consultar pagamento,OK,0.03,0
+gemini,4,Cancelar pagamento,OK,1768.54,0
+gemini,4,Cancelar pedido,OK,2238.04,0
+gemini,4,Consultar pedido cancelado,OK,0.04,0
+gemini,4,Consultar pagamento cancelado,OK,0.02,0
+mock,5,Criar pedido,OK,0.18,0
+mock,5,Consultar pedido,OK,0.03,0
+mock,5,Criar pagamento,OK,0.05,0
+mock,5,Confirmar pagamento,OK,0.03,0
+mock,5,Consultar pagamento,OK,0.01,0
+mock,5,Cancelar pagamento,OK,0.03,0
+mock,5,Cancelar pedido,OK,0.06,0
+mock,5,Consultar pedido cancelado,OK,0.03,0
+mock,5,Consultar pagamento cancelado,OK,0.01,0
+gemini,5,Criar pedido,OK,27621.63,0
+gemini,5,Consultar pedido,OK,0.05,0
+gemini,5,Criar pagamento,OK,1884.24,0
+gemini,5,Confirmar pagamento,OK,2080.5,0
+gemini,5,Consultar pagamento,OK,0.05,0
+gemini,5,Cancelar pagamento,OK,1440.29,0
+gemini,5,Cancelar pedido,OK,2277.26,0
+gemini,5,Consultar pedido cancelado,OK,0.04,0
+gemini,5,Consultar pagamento cancelado,OK,0.02,0
+mock,6,Criar pedido,OK,0.17,0
+mock,6,Consultar pedido,OK,0.03,0
+mock,6,Criar pagamento,OK,0.05,0
+mock,6,Confirmar pagamento,OK,0.04,0
+mock,6,Consultar pagamento,OK,0.01,0
+mock,6,Cancelar pagamento,OK,0.03,0
+mock,6,Cancelar pedido,OK,0.06,0
+mock,6,Consultar pedido cancelado,OK,0.03,0
+mock,6,Consultar pagamento cancelado,OK,0.01,0
+gemini,6,Criar pedido,OK,10343.27,0
+gemini,6,Consultar pedido,OK,0.04,0
+gemini,6,Criar pagamento,OK,1705.05,0
+gemini,6,Confirmar pagamento,OK,1622.66,0
+gemini,6,Consultar pagamento,OK,0.03,0
+gemini,6,Cancelar pagamento,OK,7427.72,0
+gemini,6,Cancelar pedido,OK,2450.4,0
+gemini,6,Consultar pedido cancelado,OK,0.05,0
+gemini,6,Consultar pagamento cancelado,OK,0.03,0
+mock,7,Criar pedido,OK,0.19,0
+mock,7,Consultar pedido,OK,0.03,0
+mock,7,Criar pagamento,OK,0.06,0
+mock,7,Confirmar pagamento,OK,0.04,0
+mock,7,Consultar pagamento,OK,0.02,0
+mock,7,Cancelar pagamento,OK,0.03,0
+mock,7,Cancelar pedido,OK,0.06,0
+mock,7,Consultar pedido cancelado,OK,0.03,0
+mock,7,Consultar pagamento cancelado,OK,0.01,0
+gemini,7,Criar pedido,OK,2441.73,0
+gemini,7,Consultar pedido,OK,0.04,0
+gemini,7,Criar pagamento,OK,1717.86,0
+gemini,7,Confirmar pagamento,OK,46928.79,0
+gemini,7,Consultar pagamento,OK,0.04,0
+gemini,7,Cancelar pagamento,OK,2420.94,0
+gemini,7,Cancelar pedido,OK,19225.46,0
+gemini,7,Consultar pedido cancelado,OK,0.04,0
+gemini,7,Consultar pagamento cancelado,OK,0.02,0
+mock,8,Criar pedido,OK,0.2,0
+mock,8,Consultar pedido,OK,0.03,0
+mock,8,Criar pagamento,OK,0.05,0
+mock,8,Confirmar pagamento,OK,0.04,0
+mock,8,Consultar pagamento,OK,0.01,0
+mock,8,Cancelar pagamento,OK,0.03,0
+mock,8,Cancelar pedido,OK,0.06,0
+mock,8,Consultar pedido cancelado,OK,0.03,0
+mock,8,Consultar pagamento cancelado,OK,0.01,0
+gemini,8,Criar pedido,OK,2480.49,0
+gemini,8,Consultar pedido,OK,0.04,0
+gemini,8,Criar pagamento,OK,12340.62,0
+gemini,8,Confirmar pagamento,OK,2154.29,0
+gemini,8,Consultar pagamento,OK,0.03,0
+gemini,8,Cancelar pagamento,OK,2633.81,0
+gemini,8,Cancelar pedido,OK,3118.44,0
+gemini,8,Consultar pedido cancelado,OK,0.04,0
+gemini,8,Consultar pagamento cancelado,OK,0.02,0
+mock,9,Criar pedido,OK,0.25,0
+mock,9,Consultar pedido,OK,0.03,0
+mock,9,Criar pagamento,OK,0.05,0
+mock,9,Confirmar pagamento,OK,0.04,0
+mock,9,Consultar pagamento,OK,0.01,0
+mock,9,Cancelar pagamento,OK,0.03,0
+mock,9,Cancelar pedido,OK,0.06,0
+mock,9,Consultar pedido cancelado,OK,0.03,0
+mock,9,Consultar pagamento cancelado,OK,0.01,0
+gemini,9,Criar pedido,OK,2476.88,0
+gemini,9,Consultar pedido,OK,0.04,0
+gemini,9,Criar pagamento,OK,1825.56,0
+gemini,9,Confirmar pagamento,OK,2282.4,0
+gemini,9,Consultar pagamento,OK,0.03,0
+gemini,9,Cancelar pagamento,OK,1762.41,0
+gemini,9,Cancelar pedido,OK,1863.45,0
+gemini,9,Consultar pedido cancelado,OK,0.04,0
+gemini,9,Consultar pagamento cancelado,OK,0.02,0

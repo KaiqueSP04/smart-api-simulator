@@ -1,0 +1,20 @@
+[OK] Criar pedido - 2476.88 ms
+[OK] Consultar pedido - 0.04 ms
+[OK] Criar pagamento - 1825.56 ms
+[OK] Confirmar pagamento - 2282.40 ms
+[OK] Consultar pagamento - 0.03 ms
+[OK] Cancelar pagamento - 1762.41 ms
+[OK] Cancelar pedido - 1863.45 ms
+[OK] Consultar pedido cancelado - 0.04 ms
+[OK] Consultar pagamento cancelado - 0.02 ms
+
+=== RESULTADOS DO GEMINI ===
+Operacoes executadas: 9/9
+Operacoes aprovadas: 9/9
+Tempo medio: 1134.54 ms
+Mediana: 1762.41 ms
+Tempo minimo: 0.02 ms
+Tempo maximo: 2476.88 ms
+Tempo total: 10210.83 ms
+CSV salvo em: C:\Users\kiqsp\OneDrive\Documentos\FACULDADE\TCC\Projeto_TCC\smart-api-simulator\experimento\resultados_gemini.csv
+

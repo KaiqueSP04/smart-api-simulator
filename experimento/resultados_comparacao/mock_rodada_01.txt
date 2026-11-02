@@ -1,0 +1,19 @@
+[OK] Criar pedido - 0.20 ms
+[OK] Consultar pedido - 0.03 ms
+[OK] Criar pagamento - 0.05 ms
+[OK] Confirmar pagamento - 0.04 ms
+[OK] Consultar pagamento - 0.02 ms
+[OK] Cancelar pagamento - 0.04 ms
+[OK] Cancelar pedido - 0.06 ms
+[OK] Consultar pedido cancelado - 0.05 ms
+[OK] Consultar pagamento cancelado - 0.02 ms
+
+Resultado: 9/9 aprovados
+
+=== DESEMPENHO DO MOCK TRADICIONAL ===
+Tempo medio: 0.06 ms
+Mediana: 0.04 ms
+Tempo minimo: 0.02 ms
+Tempo maximo: 0.20 ms
+Tempo total: 0.51 ms
+

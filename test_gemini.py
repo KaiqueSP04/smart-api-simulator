@@ -1,16 +1,23 @@
+
 import os
 from dotenv import load_dotenv
 from google import genai
 
-load_dotenv()
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY")
-)
+def main():
+    load_dotenv()
 
-interaction = client.interactions.create(
-    model="gemini-3.6-flash",
-    input="Responda apenas: Gemini conectado."
-)
+    client = genai.Client(
+        api_key=os.getenv("GEMINI_API_KEY")
+    )
 
-print(interaction.output_text)
+    interaction = client.interactions.create(
+        model="gemini-3.6-flash",
+        input="Responda apenas: Gemini conectado."
+    )
+
+    print(interaction.output_text)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,3 @@
+﻿gerador,rodadas,operacoes_aprovadas,operacoes_previstas,media_ms,mediana_ms,minimo_ms,maximo_ms,desvio_padrao_ms
+mock,9,81,81,0.05074074074074074,0.03,0.01,0.25,0.053427001080394214
+gemini,9,81,81,2990.4143209876543,1717.86,0.02,46928.79,6667.440436484405
