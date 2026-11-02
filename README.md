@@ -261,6 +261,36 @@ Para criar um pedido, use `nome_cliente` e `itens`. Cada item contém `nome_prod
 
 `CommerceRules`, em `app/application/payment_rules.py`, é injetado como política de requisição e normalizador de respostas. Antes da geração, verifica sessão, existência do pedido, situação `criado` e total válido. Sem sessão retorna 400; pedido ausente na sessão retorna 404; pedido cancelado retorna 400. O pagamento é integral e não inclui parcelamento. Essa política também delega o cálculo de pedidos a `OrderCalculation`.
 
+### Acesso à demonstração e diagnóstico
+
+As opções abaixo são lidas ao construir a aplicação; reinicie o serviço após
+alterá-las. Não publique a chave no repositório, em URLs ou em exemplos reais.
+
+| Variável | Comportamento |
+|---|---|
+| `SIMULATOR_AUTH_ENABLED` | `true` habilita a proteção das operações do simulador. Padrão: `false`, preservando o uso local sem chave. |
+| `SIMULATOR_ACCESS_KEY` | Segredo definido pelo operador. Obrigatório e não vazio quando a proteção está habilitada; a aplicação recusa inicializar se faltar. |
+| `SIMULATOR_DEBUG_ENABLED` | Controla se `X-Debug: true` pode retornar diagnóstico. Padrão: `false` com proteção habilitada e `true` sem proteção. |
+
+Para a implantação pública, configure `SIMULATOR_AUTH_ENABLED=true`, defina
+`SIMULATOR_ACCESS_KEY` com um segredo forte e configure
+`SIMULATOR_DEBUG_ENABLED=false`. Os indicadores aceitam `true`, `false`, `1` e
+`0`; outros valores impedem a inicialização.
+
+O Swagger em `/docs` continua público. Clique em **Authorize** e informe somente
+o valor da chave: a interface envia o cabeçalho `X-API-Key` nas operações
+protegidas. Requisições sem chave ou com chave incorreta recebem HTTP 401 antes
+de executar o motor, acessar sessões ou gerar respostas. `/` e `/openapi.json`
+também permanecem públicos. A chave não integra o contexto da simulação nem os
+documentos de logging. Com diagnóstico desabilitado, `X-Debug: true` não inclui
+o campo `diagnostico` na resposta.
+
+Essa chave restringe o acesso à demonstração; não identifica usuários nem
+implementa autorização individual por sessão, limitação de taxa ou orçamento
+de consumo. Compartilhe-a apenas com os participantes autorizados e utilize
+HTTPS. Chamadas diretas ao motor em scripts internos não passam pela proteção
+HTTP.
+
 Nuvem (Railway)
 A aplicação também é publicada em nuvem na plataforma Railway, por meio de deploy automático a partir do repositório GitHub. O Procfile define o comando de inicialização, e as credenciais (GEMINI_API_KEY e MONGODB_URI) são configuradas como variáveis de ambiente na plataforma. Dessa forma, os endpoints simulados ficam acessíveis publicamente pela internet, sem necessidade de servidor local.
 

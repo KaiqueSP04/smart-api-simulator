@@ -1,7 +1,10 @@
 import inspect
+import os
+import secrets
 
-from fastapi import Body, FastAPI, Header, Path, Query, Request
+from fastapi import Body, Depends, FastAPI, Header, HTTPException, Path, Query, Request, Security
 from fastapi.responses import JSONResponse
+from fastapi.security import APIKeyHeader
 
 from ..models import Endpoint
 from .http_results import to_http_response
@@ -23,7 +26,7 @@ def get_python_type(schema: dict):
     return type_mapping.get(schema_type, str)
 
 
-def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
+def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine, debug_enabled: bool = True):
     async def endpoint_handler(
         request: Request,
         x_session_id: str | None = None,
@@ -44,7 +47,7 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
             x_session_id,
         )
 
-        status_code, content = to_http_response(result, debug=x_debug)
+        status_code, content = to_http_response(result, debug=x_debug and debug_enabled)
         return JSONResponse(status_code=status_code, content=content)
 
     signature_parameters = [
@@ -141,6 +144,32 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine):
 
 
 def create_http_app(endpoints, engine: SimulationEngine, lifespan):
+    def env_flag(name, default):
+        value = os.getenv(name)
+        if value is None:
+            return default
+        value = value.strip().lower()
+        if value not in {"true", "false", "1", "0"}:
+            raise ValueError(f"{name} deve ser true, false, 1 ou 0")
+        return value in {"true", "1"}
+
+    access_enabled = env_flag("SIMULATOR_AUTH_ENABLED", False)
+    debug_enabled = env_flag("SIMULATOR_DEBUG_ENABLED", not access_enabled)
+    route_dependencies = []
+    if access_enabled:
+        access_key = os.getenv("SIMULATOR_ACCESS_KEY")
+        if not access_key or not access_key.strip():
+            raise ValueError("SIMULATOR_ACCESS_KEY obrigatoria com protecao habilitada")
+        key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+        async def require_access_key(provided: str | None = Security(key_header)):
+            if provided is None or not secrets.compare_digest(
+                provided.encode("utf-8"), access_key.encode("utf-8")
+            ):
+                raise HTTPException(status_code=401, detail="Chave de acesso invalida")
+
+        route_dependencies = [Depends(require_access_key)]
+
     app = FastAPI(
         title="Smart API Simulator",
         version="2.0.0",
@@ -180,7 +209,8 @@ def create_http_app(endpoints, engine: SimulationEngine, lifespan):
 
         app.add_api_route(
             endpoint.path,
-            create_endpoint_handler(endpoint, engine),
+            create_endpoint_handler(endpoint, engine, debug_enabled=debug_enabled),
+            dependencies=route_dependencies,
             methods=[endpoint.method],
             status_code=int(next(iter(endpoint.responses))),
             responses=documented_responses(endpoint),
