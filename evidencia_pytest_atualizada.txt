@@ -1,0 +1,88 @@
+EVIDENCIA DA SUITE LOCAL ATUAL
+Inicio UTC: 2026-11-06T16:42:14.711614+00:00
+Fim UTC: 2026-11-06T16:42:18.293838+00:00
+Inicio America/Sao_Paulo: 2026-11-06T13:42:14.711614-03:00
+Fim America/Sao_Paulo: 2026-11-06T13:42:18.293838-03:00
+Sistema: Windows 10 10.0.26300 AMD64
+Python: 3.11.9
+Pytest: 9.1.1
+pytest-asyncio: 1.4.0
+Commit: 9af129a91ac399a19267109109cda9382b4728ed
+Estado Git anterior: limpo
+Comando: .venv/Scripts/python.exe -B -m pytest -p no:cacheprovider -p pytest_asyncio.plugin tests test_simulation_engine.py -vv
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1; apenas pytest_asyncio.plugin carregado explicitamente.
+Variaveis de integracoes e protecao removidas apenas do subprocesso; sem leitura do .env pelo executor.
+Escopo: somente suite local. Dependencias externas simuladas; nenhum experimento executado.
+Nota: uma invocacao preliminar teve argumentos de plugin incorretos e nao executou casos; o coletor de evidencia tambem encontrou a codificacao UTF-16 do registro antigo. A execucao abaixo usa os argumentos corrigidos.
+Saida integral; caminhos locais pessoais substituidos:
+
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.1.1, pluggy-1.6.0 -- <CAMINHO_LOCAL_REMOVIDO>\.venv\Scripts\python.exe
+rootdir: <CAMINHO_LOCAL_REMOVIDO>
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 56 items
+
+tests/test_gemini_schema.py::test_contract_is_preserved_and_limits_are_still_enforced_locally PASSED [  1%]
+tests/test_gemini_schema.py::test_nested_conversion_preserves_property_names_and_example_values PASSED [  3%]
+tests/test_gemini_schema.py::test_actual_sdk_call_uses_adapted_schema PASSED [  5%]
+tests/test_http_security.py::test_denied_before_engine[GET-/pedidos/101-None-headers0] PASSED [  7%]
+tests/test_http_security.py::test_denied_before_engine[GET-/pedidos/101-None-headers1] PASSED [  8%]
+tests/test_http_security.py::test_denied_before_engine[POST-/pedidos-body1-headers0] PASSED [ 10%]
+tests/test_http_security.py::test_denied_before_engine[POST-/pedidos-body1-headers1] PASSED [ 12%]
+tests/test_http_security.py::test_authorized_and_public_swagger PASSED   [ 14%]
+tests/test_http_security.py::test_debug_configuration[False-None-True] PASSED [ 16%]
+tests/test_http_security.py::test_debug_configuration[False-false-False] PASSED [ 17%]
+tests/test_http_security.py::test_debug_configuration[True-false-False] PASSED [ 19%]
+tests/test_http_security.py::test_debug_configuration[True-true-True] PASSED [ 21%]
+tests/test_http_security.py::test_protection_requires_key[None] PASSED   [ 23%]
+tests/test_http_security.py::test_protection_requires_key[] PASSED       [ 25%]
+tests/test_http_security.py::test_protection_requires_key[   ] PASSED    [ 26%]
+tests/test_http_security.py::test_invalid_flag_rejected[SIMULATOR_AUTH_ENABLED] PASSED [ 28%]
+tests/test_http_security.py::test_invalid_flag_rejected[SIMULATOR_DEBUG_ENABLED] PASSED [ 30%]
+tests/test_regression.py::test_criacao_e_consulta_de_pedido PASSED       [ 32%]
+tests/test_regression.py::test_isolamento_entre_sessoes PASSED           [ 33%]
+tests/test_regression.py::test_cancelamento_preserva_dados PASSED        [ 35%]
+tests/test_regression.py::test_criacao_e_confirmacao_pagamento PASSED    [ 37%]
+tests/test_regression.py::test_validacao_do_request_body PASSED          [ 39%]
+tests/test_regression.py::test_resposta_invalida_apos_tres_tentativas PASSED [ 41%]
+tests/test_regression.py::test_id_incorreto_na_resposta PASSED           [ 42%]
+tests/test_regression.py::test_colisao_de_id_na_criacao PASSED           [ 44%]
+tests/test_regression.py::test_generator_failures_are_transport_independent[timeout-generation_timeout-503] PASSED [ 46%]
+tests/test_regression.py::test_generator_failures_are_transport_independent[quota-generation_rate_limited-429] PASSED [ 48%]
+tests/test_regression.py::test_generator_failures_are_transport_independent[unavailable-generation_unavailable-503] PASSED [ 50%]
+tests/test_regression.py::test_http_flow_preserves_envelope_and_maps_failures PASSED [ 51%]
+tests/test_regression.py::test_multiple_items_total_is_calculated_and_persisted PASSED [ 53%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[0-1] PASSED [ 55%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[-1-1] PASSED [ 57%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[1.5-1] PASSED [ 58%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[True-1] PASSED [ 60%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[1-0] PASSED [ 62%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[1--1] PASSED [ 64%]
+tests/test_regression.py::test_invalid_item_rejected_before_generation[1-1.001] PASSED [ 66%]
+tests/test_regression.py::test_invalid_order_shape_rejected[body0] PASSED [ 67%]
+tests/test_regression.py::test_invalid_order_shape_rejected[body1] PASSED [ 69%]
+tests/test_regression.py::test_invalid_order_shape_rejected[body2] PASSED [ 71%]
+tests/test_regression.py::test_invalid_order_shape_rejected[body3] PASSED [ 73%]
+tests/test_regression.py::test_decimal_total_avoids_float_arithmetic_error PASSED [ 75%]
+tests/test_regression.py::test_debug_header_opt_in_and_swagger_page PASSED [ 76%]
+tests/test_regression.py::test_payment_amount_and_reference_override_model_output PASSED [ 78%]
+tests/test_regression.py::test_payment_preconditions_before_generation[None-order0-body0-invalid_request] PASSED [ 80%]
+tests/test_regression.py::test_payment_preconditions_before_generation[outra-order1-body1-not_found] PASSED [ 82%]
+tests/test_regression.py::test_payment_preconditions_before_generation[compra-None-body2-not_found] PASSED [ 83%]
+tests/test_regression.py::test_payment_preconditions_before_generation[compra-order3-body3-invalid_request] PASSED [ 85%]
+tests/test_regression.py::test_payment_preconditions_before_generation[compra-order4-body4-invalid_state] PASSED [ 87%]
+tests/test_regression.py::test_payment_preconditions_before_generation[compra-order5-body5-invalid_request] PASSED [ 89%]
+tests/test_request_logging.py::test_logger_preserves_history_format[result0-201-True] PASSED [ 91%]
+tests/test_request_logging.py::test_logger_preserves_history_format[result1-429-False] PASSED [ 92%]
+tests/test_request_logging.py::test_logging_failure_does_not_interrupt_simulation PASSED [ 94%]
+tests/test_swagger_docs.py::test_swagger_request_examples_include_every_schema_field PASSED [ 96%]
+tests/test_swagger_docs.py::test_swagger_documents_actual_envelope_and_creation_status PASSED [ 98%]
+test_simulation_engine.py::test_simulation_engine_uses_injected_response_generator PASSED [100%]
+
+============================= 56 passed in 2.83s ==============================
+
+Codigo de saida: 0
+Casos originais: 42; seguranca: 14; total: 56.
+Mesmos identificadores dos 42 originais: True
+Originais aprovados: 42
+Seguranca aprovados: 14
