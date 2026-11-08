@@ -104,6 +104,7 @@ def get_endpoints(contract):
                 method=method.upper(),
                 summary=details.get("summary"),
                 description=details.get("description"),
+                tags=details.get("tags", []),
                 parameters=parameters,
                 request_body=request_body,
                 responses=responses

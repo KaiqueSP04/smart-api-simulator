@@ -15,6 +15,7 @@ class Endpoint(BaseModel):
     method: str
     summary: str | None = None
     description: str | None = None
+    tags: list[str] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)
     request_body: dict[str, Any] | None = None
     responses: dict[str, Any] = Field(default_factory=dict)

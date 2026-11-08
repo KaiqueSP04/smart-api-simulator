@@ -45,8 +45,8 @@ body { margin:0; background:#f4f7fb; }
 BANNER = """
 <header class="docs-banner">
   <span class="eyebrow">Smart API Simulator</span>
-  <h1>Uma compra, do pedido ao pagamento.</h1>
-  <p>Preencha os produtos, confira o total e acompanhe cada etapa.
+  <h1>Explore e simule o contrato da API.</h1>
+  <p>Consulte as operações e os exemplos definidos no contrato carregado.
   Use a mesma sessão para conectar suas chamadas.</p>
   <nav aria-label="Atalhos da documentação">
     <a href="#swagger-ui">Explorar e testar a API</a>
@@ -59,7 +59,7 @@ BANNER = """
 def swagger_page(openapi_url: str) -> HTMLResponse:
     page = get_swagger_ui_html(
         openapi_url=openapi_url,
-        title="Pedidos e pagamentos · Smart API Simulator",
+        title="Documentação · Smart API Simulator",
         swagger_ui_parameters={
             "docExpansion": "none", "filter": True,
             "displayRequestDuration": True, "defaultModelsExpandDepth": -1,

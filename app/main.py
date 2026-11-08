@@ -63,7 +63,7 @@ def create_app():
         finally:
             await mongo_client.close()
 
-    return create_http_app(endpoints, simulation_engine, lifespan)
+    return create_http_app(endpoints, simulation_engine, lifespan, contract_tags=contract.get("tags", []))
 
 
 app = create_app()

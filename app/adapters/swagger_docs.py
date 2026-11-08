@@ -6,42 +6,20 @@ from ..models import Endpoint
 
 
 DESCRIPTION = """
-Simule pedidos e pagamentos e acompanhe os recursos de uma mesma sessão.
+Simule as operações definidas no contrato OpenAPI carregado.
 
-### Experimente um fluxo completo
-1. Abra **POST /pedidos**, clique em **Try it out** e preencha cliente e itens.
-2. Preencha **X-Session-ID** com `checkout-demo-001` e clique em **Execute**.
-3. Confira **dados.total**, calculado automaticamente, e copie **dados.id**.
-4. Em **GET /pedidos/{id}**, informe esse identificador e repita o mesmo cabeçalho.
-5. Em **POST /pagamentos**, coloque o identificador do pedido em **pedido_id**,
-   escolha **metodo** e repita a sessão. O valor vem automaticamente do pedido.
-   Copie o novo **dados.id**.
-6. Use o ID do pagamento em **POST /pagamentos/{id}/confirmar** e consulte
-   **GET /pagamentos/{id}**, sempre com a mesma sessão.
-
-### Preenchimento simples
-| Campo | O que informar |
-| --- | --- |
-| nome_cliente | Nome do cliente |
-| itens | Lista dos produtos; adicione um objeto por produto diferente |
-| nome_produto | Nome do produto |
-| quantidade | Número inteiro de unidades, a partir de 1 |
-| preco_unitario | Preço de uma unidade, com ponto decimal e até duas casas: 124.95 |
-
-Não informe **total** na criação do pedido: o sistema soma quantidade × preço
-de cada item. Dois pedidos separados exigem duas chamadas de criação.
+### Como utilizar
+1. Escolha uma operação e consulte seus parâmetros, schemas e exemplos.
+2. Clique em **Try it out**, preencha os dados e execute a chamada.
+3. Quando o recurso retornar **dados.id**, utilize esse identificador nas operações relacionadas.
 
 ### Sessões e respostas
-- **X-Session-ID** é opcional. Use-o para manter os recursos entre chamadas.
-  Sem ele, as chamadas não compartilham estado persistente.
-- Repita o valor em cada requisição. Os exemplos de IDs são ilustrativos:
-  substitua-os pelos identificadores retornados na sua sessão.
-- A sessão expira após 30 minutos sem gravação de estado.
-- O recurso retornado fica em **dados**. **codigo_status** indica o resultado.
-- **X-Debug** fica em **false** por padrão. Selecione **true** para incluir
-  **diagnostico**, com parâmetros, corpo enviado e contexto técnico da simulação.
-- Em caso de erro, leia **mensagem**. Um **404** com sessão pode indicar que o
-  recurso não foi criado nela ou que a sessão expirou.
+- **X-Session-ID** é opcional. Repita o mesmo valor para manter recursos entre chamadas.
+- O vencimento da sessão é definido para 30 minutos após cada gravação de estado.
+- O recurso retornado fica em **dados**; **codigo_status** indica o resultado.
+- Quando a proteção estiver habilitada, informe a chave em **Authorize**.
+- **X-Debug: true** solicita diagnóstico somente quando permitido pela configuração.
+- Em caso de erro, consulte **mensagem** ou os detalhes de validação retornados.
 """
 
 
@@ -66,7 +44,7 @@ def documented_responses(endpoint: Endpoint) -> dict:
                 "dados": payload_schema,
                 "diagnostico": {
                     "type": "object",
-                    "description": "Incluído somente com X-Debug: true. Não faz parte dos dados do pedido.",
+                    "description": "Incluído somente com X-Debug: true. Não faz parte dos dados do recurso.",
                     "properties": {
                         "parametros": {"type": "object", "additionalProperties": True},
                         "corpo_requisicao": {"anyOf": [{"type": "object"}, {"type": "null"}]},

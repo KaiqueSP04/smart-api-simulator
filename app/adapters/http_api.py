@@ -143,7 +143,7 @@ def create_endpoint_handler(endpoint: Endpoint, engine: SimulationEngine, debug_
     return endpoint_handler
 
 
-def create_http_app(endpoints, engine: SimulationEngine, lifespan):
+def create_http_app(endpoints, engine: SimulationEngine, lifespan, contract_tags=None):
     def env_flag(name, default):
         value = os.getenv(name)
         if value is None:
@@ -175,11 +175,10 @@ def create_http_app(endpoints, engine: SimulationEngine, lifespan):
         version="2.0.0",
         docs_url=None,
         description=DESCRIPTION,
-        openapi_tags=[
-            {"name": "Pedidos", "description": "Informe cliente e itens. O total é automático. Copie dados.id para consultar ou cancelar."},
-            {"name": "Pagamentos", "description": "Informe pedido_id e metodo na mesma sessão do pedido. O valor é automático. Use dados.id do pagamento para consultar, confirmar ou cancelar."},
-            {"name": "Sistema", "description": "Verifique se a API está disponível."},
-        ],
+        openapi_tags=list(contract_tags or []) + (
+            [] if any(tag.get("name") == "Sistema" for tag in (contract_tags or []))
+            else [{"name": "Sistema", "description": "Verifique se a API está disponível."}]
+        ),
         swagger_ui_parameters={
             "docExpansion": "none",
             "filter": True,
@@ -216,7 +215,7 @@ def create_http_app(endpoints, engine: SimulationEngine, lifespan):
             responses=documented_responses(endpoint),
             summary=endpoint.summary,
             description=endpoint.description,
-            tags=[resource_tag(endpoint)],
+            tags=endpoint.tags or [resource_tag(endpoint)],
             **route_options,
         )
 

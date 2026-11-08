@@ -65,3 +65,36 @@ def test_swagger_documents_actual_envelope_and_creation_status():
     assert debug["schema"]["default"] is False
     assert debug["schema"]["type"] == "boolean"
     assert "/docs" not in schema["paths"]
+
+
+def test_contract_tags_and_routes_replace_business_categories():
+    contract = {
+        "tags": [{"name": "Logistica", "description": "Operacoes de entrega"}],
+        "paths": {
+            "/entregas": {"get": {
+                "tags": ["Logistica", "Consultas"],
+                "responses": {"200": {"description": "OK"}},
+            }},
+            "/sem-tags": {"get": {"responses": {"200": {"description": "OK"}}}},
+        },
+    }
+    endpoints = get_endpoints(contract)
+    app = create_http_app(endpoints, object(), None, contract_tags=contract["tags"])
+    schema = app.openapi()
+    assert endpoints[0].tags == ["Logistica", "Consultas"]
+    assert schema["paths"]["/entregas"]["get"]["tags"] == ["Logistica", "Consultas"]
+    assert schema["paths"]["/sem-tags"]["get"]["tags"] == ["Sem Tags"]
+    assert schema["tags"] == contract["tags"] + [
+        {"name": "Sistema", "description": "Verifique se a API está disponível."},
+    ]
+    assert set(schema["paths"]) == {"/", "/entregas", "/sem-tags"}
+    assert {route.path for route in app.routes} == {
+        "/", "/docs", "/redoc", "/openapi.json", "/entregas", "/sem-tags",
+    }
+    assert "/pedidos" not in schema["info"]["description"]
+    assert "/pagamentos" not in schema["info"]["description"]
+
+
+def test_system_tag_is_not_duplicated():
+    app = create_http_app([], object(), None, contract_tags=[{"name": "Sistema"}])
+    assert app.openapi()["tags"] == [{"name": "Sistema"}]
